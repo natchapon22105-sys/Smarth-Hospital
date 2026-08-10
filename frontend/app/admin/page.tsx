@@ -24,7 +24,7 @@ export default function AdminPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"dashboard" | "settings" | "usage">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "settings" | "usage" | "nurses">("dashboard");
 
   // Dashboard
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -41,6 +41,10 @@ export default function AdminPage() {
     loadData();
   }, [tab]);
 
+  // Nurse management state
+  const [pendingNurses, setPendingNurses] = useState<any[]>([]);
+  const [allNurses, setAllNurses] = useState<any[]>([]);
+
   async function loadData() {
     setLoading(true);
     setError(null);
@@ -54,6 +58,13 @@ export default function AdminPage() {
       } else if (tab === "usage") {
         const res = await api.get("/api/admin/usage");
         setUsage(res);
+      } else if (tab === "nurses") {
+        const [pendingRes, allRes] = await Promise.all([
+          api.get<{ nurses: any[] }>("/api/admin/nurses/pending"),
+          api.get<{ nurses: any[] }>("/api/admin/nurses/all"),
+        ]);
+        setPendingNurses(pendingRes.nurses);
+        setAllNurses(allRes.nurses);
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
@@ -97,6 +108,7 @@ export default function AdminPage() {
           { id: "dashboard" as const, label: "แดชบอร์ด" },
           { id: "settings" as const, label: "ตั้งค่าระบบ" },
           { id: "usage" as const, label: "สถิติการใช้งาน" },
+          { id: "nurses" as const, label: "จัดการพยาบาล" },
         ].map((t) => (
           <button
             key={t.id}
@@ -274,7 +286,6 @@ export default function AdminPage() {
                   ))}
                 </div>
 
-                {/* Bookings by month */}
                 {usage.monthlyBookings?.length > 0 && (
                   <div className="card p-5">
                     <h2 className="mb-3 font-display text-[15px] font-semibold text-ink">การจองรายเดือน</h2>
@@ -283,18 +294,119 @@ export default function AdminPage() {
                         <div key={m.month} className="flex items-center gap-3">
                           <span className="w-20 text-sm text-ink/70">{m.month}</span>
                           <div className="flex-1 rounded-full bg-teal-light">
-                            <div
-                              className="rounded-full bg-teal py-1 text-center text-xs text-white"
-                              style={{ width: `${Math.min(100, (m.count / 50) * 100)}%` }}
-                            >
-                              {m.count}
-                            </div>
+                            <div className="rounded-full bg-teal py-1 text-center text-xs text-white" style={{ width: `${Math.min(100, (m.count / 50) * 100)}%` }}>{m.count}</div>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
+              </>
+            )}
+
+            {/* ---- NURSES TAB ---- */}
+            {tab === "nurses" && (
+              <>
+                {/* Pending requests */}
+                <div className="card p-5">
+                  <h2 className="mb-3 font-display text-[15px] font-semibold text-ink">คำขอที่รออนุมัติ</h2>
+                  {pendingNurses.length === 0 ? (
+                    <p className="text-sm text-ink/50">ไม่มีคำขอที่รออนุมัติ</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {pendingNurses.map((n: any) => (
+                        <div key={n.id} className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 p-4">
+                          <div>
+                            <p className="font-medium text-ink">{n.full_name}</p>
+                            <p className="text-sm text-ink/60">{n.email} · {n.username}</p>
+                            {n.phone && <p className="text-xs text-ink/40">โทร: {n.phone}</p>}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={async () => {
+                                await api.post(`/api/admin/nurses/approve/${n.id}`);
+                                loadData();
+                              }}
+                              className="rounded-lg bg-teal px-4 py-2 text-sm font-medium text-white hover:bg-teal-dark"
+                            >
+                              อนุมัติ
+                            </button>
+                            <button
+                              onClick={async () => {
+                                await api.post(`/api/admin/nurses/reject/${n.id}`);
+                                loadData();
+                              }}
+                              className="rounded-lg border border-red-200 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                            >
+                              ปฏิเสธ
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* All nurses */}
+                <div className="card p-5">
+                  <h2 className="mb-3 font-display text-[15px] font-semibold text-ink">พยาบาลทั้งหมด</h2>
+                  {allNurses.length === 0 ? (
+                    <p className="text-sm text-ink/50">ยังไม่มีพยาบาล</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                        <thead>
+                          <tr className="border-b border-line text-ink/50">
+                            <th className="pb-2 pr-3 font-medium">สถานะ</th>
+                            <th className="pb-2 pr-3 font-medium">ชื่อ</th>
+                            <th className="pb-2 pr-3 font-medium">อีเมล</th>
+                            <th className="pb-2 pr-3 font-medium">Username</th>
+                            <th className="pb-2 pr-3 font-medium">สถานะบัญชี</th>
+                            <th className="pb-2 pr-3 font-medium">กิจกรรมวันนี้</th>
+                            <th className="pb-2 font-medium">จัดการ</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {allNurses.map((n: any) => (
+                            <tr key={n.id} className="border-b border-line/50">
+                              <td className="py-2 pr-3">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`inline-block h-2.5 w-2.5 rounded-full ${
+                                    n.isOnline ? "bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.5)]" : "bg-gray-300"
+                                  }`} />
+                                  <span className="text-xs text-ink/50">{n.isOnline ? "ออนไลน์" : "ออฟไลน์"}</span>
+                                </div>
+                              </td>
+                              <td className="py-2 pr-3 text-ink/70">{n.full_name}</td>
+                              <td className="py-2 pr-3 text-ink/70">{n.email}</td>
+                              <td className="py-2 pr-3 text-ink/70">{n.username}</td>
+                              <td className="py-2 pr-3">
+                                <span className={`rounded-full px-2 py-0.5 text-xs ${
+                                  n.status === "approved" ? "bg-green-100 text-green-700" :
+                                  n.status === "rejected" ? "bg-red-100 text-red-600" :
+                                  "bg-amber-100 text-amber-700"
+                                }`}>{n.status}</span>
+                              </td>
+                              <td className="py-2 pr-3 text-xs text-ink/50">{n.todayActions ?? 0} ครั้ง</td>
+                              <td className="py-2">
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm(`ยืนยันลบพยาบาล "${n.full_name}" (${n.email})?`)) return;
+                                    await api.delete(`/api/admin/nurses/delete/${n.id}`);
+                                    loadData();
+                                  }}
+                                  className="rounded-lg border border-red-200 px-3 py-1 text-xs text-red-600 hover:bg-red-50"
+                                >
+                                  ลบ
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </>

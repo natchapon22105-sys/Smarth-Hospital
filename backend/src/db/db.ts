@@ -132,6 +132,8 @@ const migrations = [
   `ALTER TABLE bookings ADD COLUMN appointment_date TEXT`,
   `ALTER TABLE bookings ADD COLUMN appointment_time TEXT`,
   `ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'`,
+  `ALTER TABLE users ADD COLUMN last_activity TEXT`,
+  `ALTER TABLE users ADD COLUMN full_name TEXT`,
 ];
 
 for (const sql of migrations) {
@@ -147,6 +149,33 @@ db.exec(`
 CREATE TABLE IF NOT EXISTS system_settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
+)
+`);
+
+// Nurse registration requests (pending admin approval)
+db.exec(`
+CREATE TABLE IF NOT EXISTS nurse_registrations (
+  id            TEXT PRIMARY KEY,
+  email         TEXT UNIQUE NOT NULL,
+  username      TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  full_name     TEXT NOT NULL,
+  phone         TEXT,
+  status        TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'approved' | 'rejected'
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  approved_at   TEXT,
+  approved_by   TEXT REFERENCES users(id)
+)
+`);
+
+// Nurse activity log
+db.exec(`
+CREATE TABLE IF NOT EXISTS nurse_activity_log (
+  id            TEXT PRIMARY KEY,
+  nurse_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  action        TEXT NOT NULL, -- 'login' | 'logout' | 'booking_status'
+  details       TEXT,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 )
 `);
 

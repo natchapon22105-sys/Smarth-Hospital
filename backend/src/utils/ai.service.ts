@@ -74,6 +74,8 @@ export async function askFollowUpQuestions(
     ? `ผู้ป่วยมีอาการ: ${symptoms}\n\n${medicalSummary}\n\nกรุณาตั้งคำถาม 5 ข้อ โดยห้ามถามซ้ำเกี่ยวกับโรคประจำตัวหรือประวัติการแพ้ยาที่แจ้งแล้ว เน้นถามเรื่องอื่นที่จำเป็น ตอบเป็น JSON ที่มี questions array`
     : `ผู้ป่วยมีอาการ: ${symptoms}\n\nกรุณาตั้งคำถาม 5 ข้อที่จำเป็นเพื่อให้วิเคราะห์อาการได้ถูกต้อง ตอบเป็น JSON ที่มี questions array`;
 
+  const userContent: any[] = [{ type: "text" as const, text: instruction }];
+
   if (imageBase64) {
     userContent.push({
       type: "image_url" as const,

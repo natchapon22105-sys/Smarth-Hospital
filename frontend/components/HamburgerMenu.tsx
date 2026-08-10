@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 const LINKS = [
   { href: "/patient/profile", label: "ข้อมูลส่วนตัว & ประวัติสุขภาพ" },
   { href: "/booking", label: "จองคิว" },
+  { href: "/nurse", label: "ระบบคิว (พยาบาล)" },
   { href: "/admin", label: "ระบบจัดการ" },
 ];
 
