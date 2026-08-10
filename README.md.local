@@ -1,0 +1,85 @@
+# NudMedi
+
+Two separate systems, as requested:
+
+```
+nudmedi/
+  backend/   Node.js + Express + TypeScript API (SQLite via better-sqlite3)
+  frontend/  Next.js (App Router) + TypeScript + Tailwind
+```
+
+## Run it
+
+```bash
+# 1) backend
+cd backend
+cp .env.example .env
+npm install
+npm run dev        # http://localhost:4000
+
+# 2) frontend (new terminal)
+cd frontend
+cp .env.local.example .env.local
+npm install
+npm run dev         # http://localhost:3000
+```
+
+Open http://localhost:3000. `/api/*` calls from the frontend are proxied
+(`next.config.js` rewrites) straight to the backend, so the httpOnly session
+cookie stays same-origin in the browser and there are no cross-site cookie
+headaches in dev. In production, put both behind the same domain/reverse
+proxy the same way.
+
+## What's implemented
+
+**1. Auth & session**
+- Email/username + password login → backend issues an httpOnly, server-side
+  session (a random session id stored in a `sessions` table, not a JWT — so a
+  session can be revoked by deleting the row on logout).
+- `frontend/middleware.ts` gates `/app-home`, `/booking`, `/patient/*`: no
+  session cookie → redirect to `/login`. This is a UX-layer check only.
+- `backend/src/middleware/auth.middleware.ts` (`requireAuth`) is the real
+  security boundary: every patient-data route re-validates the session
+  server-side and derives `req.patientId` from it. **No route reads
+  `patientId` from the client** — booking, history, and profile handlers all
+  use `req.patientId`, closing the vulnerability described in the brief.
+
+**2. Registration**
+- Step 1: email + phone → `POST /api/auth/register/request-otp` (OTP is
+  mocked — printed to the backend console, see `backend/src/utils/otp.ts`
+  for the real-SMS-provider integration point).
+- Step 2: OTP code → `POST /api/auth/register/verify-otp`, returns a
+  short-lived `otpToken` that proves the phone was verified.
+- Step 3: username + password → `POST /api/auth/register`, which **requires**
+  a valid `otpToken` so signup can't skip OTP verification.
+
+**3. Patient intake form** (`/patient/profile`)
+- Section 1 — from ID card: เลขบัตรประชาชน, คำนำหน้า/ชื่อ/นามสกุล TH & EN,
+  ที่อยู่, วันเกิด, เพศ, ศาสนา. There's an upload/camera button that calls
+  `POST /api/ocr/id-card` — **this is mocked** (see
+  `backend/src/controllers/ocr.controller.ts`); wire up a real OCR provider
+  there (Google Vision, AWS Textract, or a Thai ID-card OCR service) and the
+  frontend needs no changes since the response shape stays the same.
+- ประวัติแพ้ยา/อาหาร, หมู่เลือด, โรคประจำตัว.
+- PDPA consent checkbox — booking is blocked (`412`) until this is accepted.
+- Emergency contact (ชื่อ, ความสัมพันธ์, เบอร์โทร).
+- Insurance type: บัตรทอง / ประกันสังคม / สวัสดิการข้าราชการ.
+
+**4. Menu + service selection (`/app-home`)**
+- Hamburger (☰) top-left opens a slide-in drawer with profile/history links
+  and logout.
+- Centered service grid with "จองคิว" as the one live card; three more cards
+  are shown disabled ("เร็วๆ นี้") so new services can be added by just
+  appending another `<ServiceCard>` — no layout rework needed.
+
+## Not wired to a real provider (by design — needs your credentials)
+- **SMS OTP**: currently logs the code to the backend console.
+- **ID card OCR**: currently returns empty mock fields.
+
+Both integration points are marked with `INTEGRATION POINT` comments in the
+respective files.
+
+## Data model
+See `backend/src/db/db.ts` for the full SQLite schema (users, sessions,
+otp_codes/otp_tokens, patients, emergency_contacts, bookings) — it's the
+single source of truth for what fields exist.

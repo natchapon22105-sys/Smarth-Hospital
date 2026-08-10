@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -eu
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+cleanup() {
+  echo ""
+  echo "Shutting down NudMedi..."
+  kill "$BACKEND_PID" 2>/dev/null || true
+  kill "$FRONTEND_PID" 2>/dev/null || true
+  wait 2>/dev/null || true
+  echo "NudMedi stopped."
+  exit 0
+}
+trap cleanup SIGINT SIGTERM
+
+# --------------------------------------------------------------------------
+# Backend
+# --------------------------------------------------------------------------
+echo "[1/2] Starting backend..."
+cd "$SCRIPT_DIR/backend"
+
+if [ ! -f .env ]; then
+  cp .env.example .env
+  echo "       Created .env from .env.example"
+fi
+
+if [ ! -d node_modules ]; then
+  npm install
+fi
+
+# Rebuild native bindings if needed (better-sqlite3 requires native compilation)
+if ! node -e "require('better-sqlite3')" 2>/dev/null; then
+  npm rebuild better-sqlite3 2>/dev/null || true
+fi
+
+npm run dev &
+BACKEND_PID=$!
+
+# Wait until backend is ready
+for i in $(seq 1 15); do
+  if curl -s http://localhost:4000/api/health >/dev/null 2>&1; then
+    echo "       Backend ready at http://localhost:4000"
+    break
+  fi
+  if [ "$i" -eq 15 ]; then
+    echo "       WARNING: Backend may not have started yet."
+  fi
+  sleep 1
+done
+
+# --------------------------------------------------------------------------
+# Frontend
+# --------------------------------------------------------------------------
+echo "[2/2] Starting frontend..."
+cd "$SCRIPT_DIR/frontend"
+
+if [ ! -f .env.local ]; then
+  cp .env.local.example .env.local
+  echo "       Created .env.local from .env.local.example"
+fi
+
+if [ ! -d node_modules ]; then
+  npm install
+fi
+
+npm run dev &
+FRONTEND_PID=$!
+
+# Small pause so the user can see the startup message
+sleep 2
+
+echo ""
+echo "  =========================================="
+echo "    NudMedi is running"
+echo "    Backend:  http://localhost:4000"
+echo "    Frontend: http://localhost:3000"
+echo "  =========================================="
+echo ""
+echo "  Run  ./stop_system.sh  to stop."
+echo ""
+
+wait
