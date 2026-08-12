@@ -56,6 +56,13 @@ export default function FamilyPage() {
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [relationship, setRelationship] = useState("child");
   const [nickname, setNickname] = useState("");
+  const [gender, setGender] = useState("");
+  const [religion, setReligion] = useState("");
+  const [drugFoodAllergies, setDrugFoodAllergies] = useState("");
+  const [bloodType, setBloodType] = useState("unknown");
+  const [congenitalDiseases, setCongenitalDiseases] = useState("");
+  const [insuranceType, setInsuranceType] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -85,6 +92,13 @@ export default function FamilyPage() {
     setDateOfBirth("");
     setRelationship("child");
     setNickname("");
+    setGender("");
+    setReligion("");
+    setDrugFoodAllergies("");
+    setBloodType("unknown");
+    setCongenitalDiseases("");
+    setInsuranceType("");
+
     setFormError(null);
   }
 
@@ -108,6 +122,13 @@ export default function FamilyPage() {
         dateOfBirth: dateOfBirth || undefined,
         relationship,
         nickname: nickname.trim() || undefined,
+        gender: gender || undefined,
+        religion: religion.trim() || undefined,
+        drugFoodAllergies: drugFoodAllergies.trim() || undefined,
+        bloodType: bloodType || undefined,
+        congenitalDiseases: congenitalDiseases.trim() || undefined,
+        insuranceType: insuranceType || undefined,
+
       });
       resetForm();
       setShowForm(false);
@@ -137,11 +158,17 @@ export default function FamilyPage() {
       />
       <div className="relative mx-auto max-w-md px-4 pt-6">
         <div className="mb-5 flex items-center justify-between">
-          <div>
+          <HamburgerMenu />
+          <div className="text-center">
             <h1 className="font-display text-xl font-semibold text-ink">บัญชีรองในครอบครัว</h1>
             <p className="text-sm text-ink/55">จองคิวให้บุคคลในครอบครัวได้ง่ายขึ้น</p>
           </div>
-          <HamburgerMenu />
+          <Link href="/app-home" className="flex h-9 w-9 items-center justify-center rounded-full border border-line text-ink/60 hover:bg-teal-light hover:text-teal-dark transition">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <polyline points="9 22 9 12 15 12 15 22" />
+            </svg>
+          </Link>
         </div>
 
         {error && (
@@ -263,6 +290,62 @@ export default function FamilyPage() {
                     <option value="other">อื่น ๆ</option>
                   </select>
                 </div>
+
+                {/* ── ซักประวัติ ── */}
+                <div className="border-t border-line pt-3">
+                  <p className="mb-2 text-sm font-medium text-ink">ข้อมูลสุขภาพ</p>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="field-label">เพศ</label>
+                      <select className="field-input" value={gender} onChange={(e) => setGender(e.target.value)}>
+                        <option value="">ไม่ระบุ</option>
+                        <option value="male">ชาย</option>
+                        <option value="female">หญิง</option>
+                        <option value="other">อื่น ๆ</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="field-label">กรุ๊ปเลือด</label>
+                      <select className="field-input" value={bloodType} onChange={(e) => setBloodType(e.target.value)}>
+                        <option value="unknown">ไม่ทราบ</option>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="AB">AB</option>
+                        <option value="O">O</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <label className="field-label">ศาสนา</label>
+                    <input className="field-input" value={religion} onChange={(e) => setReligion(e.target.value)} placeholder="เช่น พุทธ" />
+                  </div>
+
+                  <div className="mt-3">
+                    <label className="field-label">โรคประจำตัว</label>
+                    <textarea className="field-input min-h-[60px]" value={congenitalDiseases} onChange={(e) => setCongenitalDiseases(e.target.value)} placeholder="เช่น ความดันโลหิตสูง, เบาหวาน (ถ้าไม่มีเว้นว่าง)" />
+                  </div>
+
+                  <div className="mt-3">
+                    <label className="field-label">ประวัติแพ้ยา / แพ้อาหาร</label>
+                    <textarea className="field-input min-h-[60px]" value={drugFoodAllergies} onChange={(e) => setDrugFoodAllergies(e.target.value)} placeholder="เช่น แพ้ยาเพนิซิลลิน (ถ้าไม่มีเว้นว่าง)" />
+                  </div>
+
+                  <div className="mt-3">
+                    <label className="field-label">สิทธิการรักษาพยาบาล *</label>
+                    <select className="field-input" value={insuranceType} onChange={(e) => setInsuranceType(e.target.value)}>
+                      <option value="">กรุณาเลือก</option>
+                      <option value="ucs">บัตรทอง (30 บาท)</option>
+                      <option value="social_security">ประกันสังคม</option>
+                      <option value="civil_servant">ข้าราชการ/รัฐวิสาหกิจ</option>
+                      <option value="none">ไม่มีสิทธิ</option>
+                      <option value="other">อื่น ๆ</option>
+                    </select>
+                  </div>
+                </div>
+
+
 
                 {formError && (
                   <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-600">{formError}</div>

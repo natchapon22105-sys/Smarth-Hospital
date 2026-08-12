@@ -11,13 +11,19 @@ export default function AppHomePage() {
   const [newResults, setNewResults] = useState(0);
 
   useEffect(() => {
-    api
-      .get<{ results: { id: string; is_read: number }[] }>("/api/lab/results")
-      .then((res) => {
-        const count = res.results.filter((r) => !r.is_read).length;
-        setNewResults(count);
-      })
-      .catch(() => setNewResults(0));
+    function load() {
+      api
+        .get<{ results: { id: string; is_read: number }[] }>("/api/lab/results")
+        .then((res) => {
+          const count = res.results.filter((r) => !r.is_read).length;
+          setNewResults(count);
+        })
+        .catch(() => setNewResults(0));
+    }
+    load();
+    // Re-fetch เมื่อมี custom event "lab-results-read" (dispatch จาก lab-results page)
+    window.addEventListener("lab-results-read", load);
+    return () => window.removeEventListener("lab-results-read", load);
   }, []);
 
   return (

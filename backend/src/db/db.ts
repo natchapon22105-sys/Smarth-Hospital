@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS otp_tokens (
 -- filled in via the "patient intake" form (ID card OCR + manual edits).
 CREATE TABLE IF NOT EXISTS patients (
   id                    TEXT PRIMARY KEY,
-  user_id               TEXT UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id               TEXT UNIQUE REFERENCES users(id) ON DELETE CASCADE,
 
   -- from ID card (or manual entry)
   national_id           TEXT UNIQUE,          -- 13-digit Thai citizen ID
@@ -214,11 +214,21 @@ CREATE TABLE IF NOT EXISTS family_members (
 )
 `);
 
+// Migration helper: add a column only if it does not already exist.
+// Running a bare ALTER TABLE ... ADD COLUMN on every boot crashes the server
+// with "duplicate column name" once the column already exists.
+function addColumnIfMissing(table: string, column: string, definition: string) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
 // Migration: add profile_image column if missing (for existing databases)
-db.exec(`ALTER TABLE patients ADD COLUMN profile_image TEXT`);
+addColumnIfMissing("patients", "profile_image", "TEXT");
 
 // Migration: add is_read column if missing (for existing databases)
-db.exec(`ALTER TABLE lab_results ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0`);
+addColumnIfMissing("lab_results", "is_read", "INTEGER NOT NULL DEFAULT 0");
 
 // Seed default settings
 const insertSetting = db.prepare(`INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)`);

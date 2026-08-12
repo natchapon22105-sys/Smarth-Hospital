@@ -71,6 +71,10 @@ export default function LabResultsPage() {
       setResults((prev) => prev.map((x) => (x.id === r.id ? { ...x, is_read: 1 } : x)));
       api
         .post(`/api/lab/results/${r.id}/read`)
+        .then(() => {
+          // แจ้งหน้าแรกให้ re-fetch จำนวน unread
+          window.dispatchEvent(new Event("lab-results-read"));
+        })
         .catch(() => {
           // ถ้าส่งไม่สำเร็จ คืนสถานะเดิม
           setResults((prev) => prev.map((x) => (x.id === r.id ? { ...x, is_read: 0 } : x)));
@@ -135,7 +139,9 @@ export default function LabResultsPage() {
                   <button
                     type="button"
                     onClick={() => openResult(r)}
-                    className="card flex w-full items-center justify-between px-4 py-3 text-left transition hover:border-teal hover:bg-teal-light"
+                    className={`card flex w-full items-center justify-between px-4 py-3 text-left transition hover:border-teal hover:bg-teal-light ${
+                      !r.is_read ? "border-2 border-danger ring-2 ring-danger/20 bg-danger/5" : ""
+                    }`}
                   >
                     <div className="min-w-0">
                       <p className="truncate font-medium text-ink">{r.test_name}</p>
@@ -144,6 +150,9 @@ export default function LabResultsPage() {
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
+                      {!r.is_read && (
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-danger text-[11px] font-bold text-white">!</span>
+                      )}
                       <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${flag.cls}`}>
                         {flag.label}
                       </span>
@@ -202,6 +211,21 @@ export default function LabResultsPage() {
                 <p className="mt-1 whitespace-pre-wrap text-ink">{selected.note}</p>
               </div>
             )}
+
+            {/* คำเตือน */}
+            <div className="rounded-xl border-2 border-danger bg-red-50 p-4 text-sm">
+              <div className="flex items-start gap-2.5">
+                <span className="mt-0.5 text-lg">⚠️</span>
+                <div>
+                  <p className="font-bold text-danger">คำเตือน</p>
+                  <p className="mt-1 leading-relaxed text-red-700">
+                    ผลการวิเคราะห์นี้เป็นเพียงการวิเคราะห์เบื้องต้นเท่านั้น <strong className="text-danger">ไม่ใช่การวินิจฉัยทางการแพทย์</strong>
+                    <br />
+                    กรุณาปรึกษาแพทย์ผู้เชี่ยวชาญเพื่อการวินิจฉัยที่ถูกต้อง
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </Modal>

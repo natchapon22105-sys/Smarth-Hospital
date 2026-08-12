@@ -41,7 +41,9 @@ export function getFamilyMembers(req: Request, res: Response) {
 // POST /api/family/members
 // Create a sub-account (family member) with its own patient record.
 // Body: { prefixTh, firstNameTh, lastNameTh, nationalId?, dateOfBirth?,
-//         relationship, nickname? }
+//         relationship, nickname?, gender?, religion?,
+//         drugFoodAllergies?, bloodType?, congenitalDiseases?, insuranceType?,
+//         emergencyFullName?, emergencyRelationship?, emergencyPhone? }
 // ---------------------------------------------------------------------------
 const createSchema = z.object({
   prefixTh: z.string().max(20).optional(),
@@ -54,6 +56,14 @@ const createSchema = z.object({
   dateOfBirth: z.string().optional(),
   relationship: z.enum(["child", "parent", "spouse", "other"]).default("other"),
   nickname: z.string().max(50).optional(),
+  // Medical history
+  gender: z.enum(["male", "female", "other"]).optional().or(z.literal("")),
+  religion: z.string().max(50).optional().or(z.literal("")),
+  drugFoodAllergies: z.string().max(1000).optional().or(z.literal("")),
+  bloodType: z.enum(["A", "B", "AB", "O", "unknown"]).optional().or(z.literal("")),
+  congenitalDiseases: z.string().max(1000).optional().or(z.literal("")),
+  insuranceType: z.enum(["ucs", "social_security", "civil_servant", "none", "other"]).optional().or(z.literal("")),
+
 });
 
 export function createFamilyMember(req: Request, res: Response) {
@@ -81,14 +91,32 @@ export function createFamilyMember(req: Request, res: Response) {
 
   const tx = db.transaction(() => {
     db.prepare(
-      `INSERT INTO patients (id, user_id, national_id, prefix_th, first_name_th, last_name_th, date_of_birth, pdpa_consent, pdpa_consent_at)
-       VALUES (?, NULL, ?, ?, ?, ?, ?, 1, datetime('now'))`
-    ).run(patientId, f.nationalId ?? null, f.prefixTh ?? null, f.firstNameTh, f.lastNameTh, f.dateOfBirth ?? null);
+      `INSERT INTO patients (id, user_id, national_id, prefix_th, first_name_th, last_name_th, date_of_birth,
+        gender, religion, drug_food_allergies, blood_type, congenital_diseases, insurance_type,
+        pdpa_consent, pdpa_consent_at)
+       VALUES (?, NULL, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?,
+        1, datetime('now'))`
+    ).run(
+      patientId,
+      f.nationalId ?? null,
+      f.prefixTh ?? null,
+      f.firstNameTh,
+      f.lastNameTh,
+      f.dateOfBirth ?? null,
+      f.gender || null,
+      f.religion || null,
+      f.drugFoodAllergies || null,
+      f.bloodType || null,
+      f.congenitalDiseases || null,
+      f.insuranceType || null,
+    );
 
     db.prepare(
       `INSERT INTO family_members (id, owner_user_id, patient_id, relationship, nickname)
        VALUES (?, ?, ?, ?, ?)`
     ).run(memberId, userId, patientId, f.relationship, f.nickname ?? null);
+
   });
   tx();
 
