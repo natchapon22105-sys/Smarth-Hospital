@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid #d6dcdc;
+    outline-offset: 2px;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  .field-label {
+    @apply block text-sm font-medium text-ink/70 mb-1.5;
+  }
+  .field-input {
+    @apply w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-[15px] text-ink placeholder:text-ink/35 outline-none transition focus:border-teal;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-teal px-5 py-3 text-[15px] font-medium text-white transition hover:bg-teal-dark disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border border-line bg-surface px-5 py-3 text-[15px] font-medium text-ink transition hover:bg-teal-light;
+  }
+  .card {
+    @apply rounded-xl2 border border-line bg-surface shadow-card;
+  }
+}

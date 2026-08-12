@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { api, ApiError } from "@/lib/api";
 
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get("next") || "/app-home";
@@ -123,5 +123,13 @@ export default function LoginPage() {
         <Image src="/botton1669.png" alt="โทร 1669" width={56} height={56} className="h-full w-full" />
       </a>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
   );
 }

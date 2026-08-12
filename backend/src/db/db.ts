@@ -85,6 +85,9 @@ CREATE TABLE IF NOT EXISTS patients (
   pdpa_consent          INTEGER NOT NULL DEFAULT 0,
   pdpa_consent_at       TEXT,
 
+  -- profile picture (base64 data URL)
+  profile_image         TEXT,
+
   created_at            TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -178,6 +181,44 @@ CREATE TABLE IF NOT EXISTS nurse_activity_log (
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 )
 `);
+
+// Lab / test results (ผลตรวจ)
+db.exec(`
+CREATE TABLE IF NOT EXISTS lab_results (
+  id            TEXT PRIMARY KEY,
+  patient_id    TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+  test_name     TEXT NOT NULL,                       -- ชื่อการตรวจ เช่น "CBC", "ไขมันในเลือด"
+  category      TEXT NOT NULL DEFAULT 'general',     -- general | blood | xray | ultrasound | other
+  result_value  TEXT,                                -- ค่าผลตรวจ (อาจเป็นข้อความอิสระ)
+  unit          TEXT,                                -- หน่วย เช่น mg/dL
+  ref_range     TEXT,                                -- เกณฑ์ปกติ เช่น "70-100"
+  flag          TEXT NOT NULL DEFAULT 'normal',      -- normal | high | low | critical
+  note          TEXT,                                -- หมายเหตุจากแพทย์/เจ้าหน้าที่
+  doctor_name   TEXT,                                -- ผู้ออกผล
+  test_date     TEXT NOT NULL,                       -- วันที่ตรวจ (YYYY-MM-DD)
+  is_read       INTEGER NOT NULL DEFAULT 0,          -- ผู้ใช้เปิดดูผลแล้วหรือยัง (0=ยังไม่ได้อ่าน)
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+)
+`);
+
+// Family / sub-accounts — บัญชีรองผูกกับผู้ใช้หลัก (owner)
+// แต่ละสมาชิกมี patients row ของตัวเอง (เพื่อจองคิว/เก็บผลตรวจแยกกัน)
+db.exec(`
+CREATE TABLE IF NOT EXISTS family_members (
+  id            TEXT PRIMARY KEY,
+  owner_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  patient_id    TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+  relationship  TEXT NOT NULL DEFAULT 'other',  -- self | child | parent | spouse | other
+  nickname      TEXT,                           -- ชื่อเรียกในแอป (ถ้าไม่ระบุใช้ชื่อจริง)
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+)
+`);
+
+// Migration: add profile_image column if missing (for existing databases)
+db.exec(`ALTER TABLE patients ADD COLUMN profile_image TEXT`);
+
+// Migration: add is_read column if missing (for existing databases)
+db.exec(`ALTER TABLE lab_results ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0`);
 
 // Seed default settings
 const insertSetting = db.prepare(`INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)`);

@@ -116,6 +116,8 @@ export async function confirmBooking(req: Request, res: Response) {
     imageBase64: z.string().optional(),
     appointmentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "รูปแบบวันที่ไม่ถูกต้อง (YYYY-MM-DD)"),
     appointmentTime: z.string().regex(/^\d{2}:\d{2}$/, "รูปแบบเวลาไม่ถูกต้อง (HH:mm)"),
+    // Optional: book on behalf of a family member (sub-account)
+    patientId: z.string().optional(),
   });
 
   const parsed = schema.safeParse(req.body);
@@ -124,6 +126,21 @@ export async function confirmBooking(req: Request, res: Response) {
   }
 
   const { symptoms, analysis, imageBase64, appointmentDate, appointmentTime } = parsed.data;
+
+  // Resolve target patient: self (default) or a verified family member
+  let targetPatientId = req.patientId;
+  if (parsed.data.patientId && parsed.data.patientId !== req.patientId) {
+    const ok = db
+      .prepare(
+        `SELECT 1 FROM family_members WHERE owner_user_id = ? AND patient_id = ?`
+      )
+      .get(req.userId, parsed.data.patientId);
+    if (!ok) {
+      return res.status(403).json({ error: "forbidden", message: "ไม่มีสิทธิ์จองให้บุคคลนี้" });
+    }
+    targetPatientId = parsed.data.patientId;
+  }
+
   const bookingId = uuid();
 
   // Check slot is still available
@@ -138,7 +155,7 @@ export async function confirmBooking(req: Request, res: Response) {
     db.prepare(
       `INSERT INTO bookings (id, patient_id, symptoms, urgency, recommended_department, ai_recommendation, appointment_date, appointment_time, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmed')`
-    ).run(bookingId, req.patientId, symptoms, analysis.urgency, analysis.recommended_department, JSON.stringify(analysis), appointmentDate, appointmentTime);
+    ).run(bookingId, targetPatientId, symptoms, analysis.urgency, analysis.recommended_department, JSON.stringify(analysis), appointmentDate, appointmentTime);
 
     // Save image if provided
     if (imageBase64) {
@@ -161,7 +178,7 @@ export async function confirmBooking(req: Request, res: Response) {
 
 // ---------------------------------------------------------------------------
 // GET /api/booking/available-slots?date=YYYY-MM-DD
-// Returns: { slots: string[] } — list of available times (HH:mm)
+// Returns: { maxQueuePerHour, slots: { time, count, full }[] }
 // ---------------------------------------------------------------------------
 const BUSINESS_HOURS = ["08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30"];
 
@@ -173,15 +190,32 @@ export function getAvailableSlots(req: Request, res: Response) {
     return res.status(400).json({ error: "invalid_date", message: "รูปแบบวันที่ไม่ถูกต้อง (YYYY-MM-DD)" });
   }
 
-  // Get all booked slots for this date
-  const booked = db.prepare(
-    `SELECT appointment_time FROM bookings WHERE appointment_date = ? AND status != 'cancelled'`
-  ).all(date) as { appointment_time: string }[];
+  // Max queue per hour from settings (default 16)
+  const maxRow = db.prepare(`SELECT value FROM system_settings WHERE key = 'max_queue_per_hour'`).get() as
+    | { value: string }
+    | undefined;
+  const maxQueuePerHour = maxRow ? Number(maxRow.value) || 16 : 16;
 
-  const bookedTimes = new Set(booked.map((b) => b.appointment_time));
-  const available = BUSINESS_HOURS.filter((t) => !bookedTimes.has(t));
+  // Count bookings per hour for this date
+  const counts = db
+    .prepare(
+      `SELECT substr(appointment_time, 1, 2) as hour, COUNT(*) as c
+       FROM bookings WHERE appointment_date = ? AND status != 'cancelled'
+       GROUP BY hour`
+    )
+    .all(date) as { hour: string; c: number }[];
 
-  return res.json({ ok: true, slots: available });
+  const countByHour: Record<string, number> = {};
+  for (const row of counts) countByHour[row.hour] = row.c;
+
+  // Build slot list with count + full flag
+  const slots = BUSINESS_HOURS.map((time) => {
+    const hour = time.split(":")[0];
+    const count = countByHour[hour] || 0;
+    return { time, count, full: count >= maxQueuePerHour };
+  });
+
+  return res.json({ ok: true, maxQueuePerHour, slots });
 }
 
 // ---------------------------------------------------------------------------

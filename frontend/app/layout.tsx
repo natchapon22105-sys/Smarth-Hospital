@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Sarabun, Inter, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import Footer from "@/components/Footer";
 
 const sarabun = Sarabun({
   subsets: ["thai", "latin"],
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="th">
       <body className={`${sarabun.variable} ${inter.variable} ${mono.variable} font-body bg-bg text-ink antialiased`}>
         {children}
+        <Footer />
       </body>
     </html>
   );

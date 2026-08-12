@@ -60,7 +60,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await api.post("/api/auth/register", { email, phone, otpToken, username, password });
-      router.push("/patient/profile");
+      router.push("/patient/profile?first=1");
       router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "สมัครสมาชิกไม่สำเร็จ");

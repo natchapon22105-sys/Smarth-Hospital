@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import HamburgerMenu from "@/components/HamburgerMenu";
@@ -73,7 +74,10 @@ const PREFIX_EN_OPTIONS = [
   { value: "other", label: "Other" },
 ];
 
-export default function PatientProfilePage() {
+function PatientProfilePageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const isFirstTime = searchParams.get("first") === "1";
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -192,7 +196,13 @@ export default function PatientProfilePage() {
         emergencyPhone: form.emergencyPhone.replace(/[^0-9]/g, ""),
       });
       setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      // หลังบันทึกโปรไฟล์ครั้งแรกเสร็จ ให้ไปหน้าแอป (เฉพาะครั้งแรกที่มาจาก register)
+      if (isFirstTime) {
+        setTimeout(() => {
+          router.push("/app-home");
+          router.refresh();
+        }, 800);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "บันทึกไม่สำเร็จ");
     } finally {
@@ -551,5 +561,13 @@ export default function PatientProfilePage() {
         <Image src="/botton1669.png" alt="โทร 1669" width={56} height={56} className="h-full w-full" />
       </a>
     </main>
+  );
+}
+
+export default function PatientProfilePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-ink">กำลังโหลด...</div>}>
+      <PatientProfilePageInner />
+    </Suspense>
   );
 }

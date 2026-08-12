@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Modal from "@/components/Modal";
 import { api, ApiError } from "@/lib/api";
 
 type QueueBooking = {
@@ -54,6 +55,7 @@ export default function NursePage() {
   const [stats, setStats] = useState<QueueStats | null>(null);
   const [bookings, setBookings] = useState<QueueBooking[]>([]);
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<QueueBooking | null>(null);
 
   useEffect(() => {
     loadQueue();
@@ -71,7 +73,7 @@ export default function NursePage() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
         setError("คุณไม่มีสิทธิ์เข้าถึงหน้านี้ (ต้องการสิทธิ์พยาบาล)");
-        setTimeout(() => router.push("/app-home"), 2000);
+        setTimeout(() => router.push("/nurse/login"), 2000);
       } else {
         setError(err instanceof ApiError ? err.message : "โหลดข้อมูลไม่สำเร็จ");
       }
@@ -106,7 +108,7 @@ export default function NursePage() {
     <main className="min-h-screen bg-bg">
       <header className="flex items-center justify-between border-b border-line bg-surface px-5 py-4">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.push("/app-home")} className="text-sm text-teal hover:underline">
+          <button onClick={() => router.push("/nurse/login")} className="text-sm text-teal hover:underline">
             ← กลับ
           </button>
           <span className="font-display text-lg font-semibold text-ink">ระบบคิว — พยาบาล</span>
@@ -175,7 +177,7 @@ export default function NursePage() {
                       </span>
                       <span
                         className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                          URGENCY_STYLES[b.urgency] || "bg-gray-100 text-gray-600"
+                          URGENCY_STYLES[b.urgency ?? ""] || "bg-gray-100 text-gray-600"
                         }`}
                       >
                         {b.urgency === "emergency"
@@ -217,6 +219,12 @@ export default function NursePage() {
 
                   {/* Right: action buttons */}
                   <div className="flex shrink-0 flex-col gap-1.5">
+                    <button
+                      onClick={() => setSelectedBooking(b)}
+                      className="rounded-lg border border-line px-3 py-1.5 text-xs text-ink/70 hover:bg-line"
+                    >
+                      ดูรายละเอียด
+                    </button>
                     {b.status === "pending" && (
                       <button
                         onClick={() => handleStatusChange(b.id, "confirmed")}
@@ -261,6 +269,82 @@ export default function NursePage() {
           </div>
         )}
       </div>
+
+      {/* ---- Booking Detail Modal ---- */}
+      <Modal open={!!selectedBooking} onClose={() => setSelectedBooking(null)} title="รายละเอียดผู้รับคิว">
+        {selectedBooking && (
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-white/50">เวลานัด</span>
+              <span className="font-mono font-semibold text-white/90">{selectedBooking.appointment_time} น.</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-white/50">สถานะ</span>
+              <span
+                className={`rounded-full border px-2 py-0.5 text-xs ${
+                  STATUS_STYLES[selectedBooking.status] || ""
+                }`}
+              >
+                {selectedBooking.status === "confirmed"
+                  ? "เช็คอินแล้ว"
+                  : selectedBooking.status === "completed"
+                  ? "เสร็จสิ้น"
+                  : selectedBooking.status === "cancelled"
+                  ? "ยกเลิก"
+                  : "รอ"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-white/50">ความเร่งด่วน</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                  URGENCY_STYLES[selectedBooking.urgency ?? ""] || "bg-gray-100 text-gray-600"
+                }`}
+              >
+                {selectedBooking.urgency === "emergency"
+                  ? "ฉุกเฉิน"
+                  : selectedBooking.urgency === "urgent"
+                  ? "เร่งด่วน"
+                  : selectedBooking.urgency === "routine"
+                  ? "ทั่วไป"
+                  : "ไม่เร่งด่วน"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-white/50">ชื่อผู้ป่วย</span>
+              <span className="font-medium text-white/90">{getPatientName(selectedBooking)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-white/50">เลขบัตรประชาชน</span>
+              <span className="font-mono text-white/90">{selectedBooking.national_id || "-"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-white/50">เบอร์โทร</span>
+              <span className="font-mono text-white/90">{selectedBooking.phone || "-"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-white/50">อีเมล</span>
+              <span className="text-white/90">{selectedBooking.email || "-"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-white/50">แผนกที่แนะนำ</span>
+              <span className="font-medium text-navy-accent">
+                {selectedBooking.recommended_department || "-"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-white/50">วันที่จอง</span>
+              <span className="text-white/90">
+                {new Date(selectedBooking.created_at).toLocaleString("th-TH")}
+              </span>
+            </div>
+            <div className="border-t border-white/10 pt-3">
+              <span className="text-white/50">อาการ</span>
+              <p className="mt-1 whitespace-pre-wrap rounded-lg bg-white/5 p-3 text-white/80">{selectedBooking.symptoms || "-"}</p>
+            </div>
+          </div>
+        )}
+      </Modal>
     </main>
   );
 }

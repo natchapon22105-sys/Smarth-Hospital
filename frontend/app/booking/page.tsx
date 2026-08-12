@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import HamburgerMenu from "@/components/HamburgerMenu";
+import Modal from "@/components/Modal";
 import { api, ApiError } from "@/lib/api";
 
 type Booking = {
@@ -45,6 +46,7 @@ export default function BookingPage() {
   const [step, setStep] = useState<Step>("input");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSelectModal, setShowSelectModal] = useState(true); // เด้งเลือกบัญชีตอนเข้าหน้า
 
   // Step 1: input
   const [symptoms, setSymptoms] = useState("");
@@ -64,13 +66,29 @@ export default function BookingPage() {
   // Step 3.5: schedule
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
-  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+  const [availableSlots, setAvailableSlots] = useState<{ time: string; count: number; full: boolean }[]>([]);
+  const [maxQueuePerHour, setMaxQueuePerHour] = useState(16);
   const [slotsLoading, setSlotsLoading] = useState(false);
 
   // Step 4: done
   const [confirmed, setConfirmed] = useState<Booking | null>(null);
   const [history, setHistory] = useState<Booking[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+
+  // Family / sub-accounts — book on behalf of a family member
+  type FamilyMember = {
+    memberId: string;
+    patientId: string;
+    relationship: string;
+    nickname: string | null;
+    prefix_th: string | null;
+    first_name_th: string | null;
+    last_name_th: string | null;
+    national_id: string | null;
+  };
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [selectedPatientId, setSelectedPatientId] = useState<string>("self"); // "self" or patientId
 
   useEffect(() => {
     (async () => {
@@ -81,6 +99,15 @@ export default function BookingPage() {
         // non-fatal
       } finally {
         setHistoryLoading(false);
+      }
+    })();
+    // load family members for "book for someone else"
+    (async () => {
+      try {
+        const res = await api.get<{ members: FamilyMember[] }>("/api/family/members");
+        setFamilyMembers(res.members || []);
+      } catch {
+        // non-fatal
       }
     })();
   }, []);
@@ -247,8 +274,11 @@ export default function BookingPage() {
   async function fetchSlots(date: string) {
     setSlotsLoading(true);
     try {
-      const res = await api.get<{ slots: string[] }>(`/api/booking/available-slots?date=${date}`);
+      const res = await api.get<{ maxQueuePerHour: number; slots: { time: string; count: number; full: boolean }[] }>(
+        `/api/booking/available-slots?date=${date}`
+      );
       setAvailableSlots(res.slots);
+      setMaxQueuePerHour(res.maxQueuePerHour);
     } catch {
       setAvailableSlots([]);
     } finally {
@@ -277,6 +307,7 @@ export default function BookingPage() {
         imageBase64: imageBase64 || undefined,
         appointmentDate,
         appointmentTime,
+        patientId: selectedPatientId === "self" ? undefined : selectedPatientId,
       });
       setConfirmed(res.booking);
       setHistory((prev) => [res.booking, ...prev]);
@@ -643,21 +674,28 @@ export default function BookingPage() {
             ) : (
               <div className="grid grid-cols-4 gap-2">
                 {availableSlots.map((slot) => {
-                  const [h, m] = slot.split(":").map(Number);
+                  const [h, m] = slot.time.split(":").map(Number);
                   const period = h < 12 ? "เช้า" : "บ่าย";
+                  const isSelected = appointmentTime === slot.time;
+                  const isFull = slot.full;
                   return (
                     <button
-                      key={slot}
+                      key={slot.time}
                       type="button"
-                      onClick={() => setAppointmentTime(slot)}
+                      disabled={isFull}
+                      onClick={() => setAppointmentTime(slot.time)}
                       className={`rounded-xl border px-3 py-2.5 text-sm transition ${
-                        appointmentTime === slot
+                        isFull
+                          ? "cursor-not-allowed border-red-300 bg-red-100 text-red-600"
+                          : isSelected
                           ? "border-teal bg-teal text-white"
                           : "border-line bg-surface text-ink hover:bg-teal-light"
                       }`}
                     >
-                      <span className="block font-medium">{slot}</span>
-                      <span className="block text-[10px] opacity-60">{period}</span>
+                      <span className="block font-medium">{slot.time}</span>
+                      <span className={`block text-[10px] ${isFull ? "text-red-500" : "opacity-60"}`}>
+                        {isFull ? "เต็ม" : `${slot.count}/${maxQueuePerHour} คน`}
+                      </span>
                     </button>
                   );
                 })}
@@ -667,6 +705,10 @@ export default function BookingPage() {
             {appointmentTime && (
               <p className="mt-3 text-center text-sm text-teal-dark">
                 คุณเลือก: {appointmentDate} เวลา {appointmentTime} น.
+                {(() => {
+                  const sel = availableSlots.find((s) => s.time === appointmentTime);
+                  return sel?.full ? " (คิวเต็มแล้ว)" : "";
+                })()}
               </p>
             )}
 
@@ -729,24 +771,143 @@ export default function BookingPage() {
           ) : (
             <ul className="space-y-2">
               {history.map((b) => (
-                <li key={b.id} className="card flex items-center justify-between px-4 py-3 text-sm">
-                  <div>
-                    <span>{new Date(b.created_at).toLocaleString("th-TH")}</span>
-                    {b.recommended_department && (
-                      <span className="ml-2 text-xs text-teal-dark">{b.recommended_department}</span>
-                    )}
-                    {b.appointment_date && (
-                      <p className="mt-0.5 text-[11px] text-ink/45">
-                        นัด: {b.appointment_date} {b.appointment_time}
-                      </p>
-                    )}
-                  </div>
-                  <span className="text-ink/60">{b.status}</span>
+                <li key={b.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBooking(b)}
+                    className="card flex w-full items-center justify-between px-4 py-3 text-left text-sm transition hover:border-teal hover:bg-teal-light"
+                  >
+                    <div>
+                      <span>{new Date(b.created_at).toLocaleString("th-TH")}</span>
+                      {b.recommended_department && (
+                        <span className="ml-2 text-xs text-teal-dark">{b.recommended_department}</span>
+                      )}
+                      {b.appointment_date && (
+                        <p className="mt-0.5 text-[11px] text-ink/45">
+                          นัด: {b.appointment_date} {b.appointment_time}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-ink/60">{b.status}</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-ink/30">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </div>
+                  </button>
                 </li>
               ))}
             </ul>
           )}
         </section>
+
+        {/* ---- Booking Detail Modal ---- */}
+        <Modal open={!!selectedBooking} onClose={() => setSelectedBooking(null)} title="รายละเอียดการจอง">
+          {selectedBooking && (
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-ink/50">หมายเลขคิว</span>
+                <span className="font-mono font-semibold text-teal-dark">
+                  {selectedBooking.id.slice(0, 8).toUpperCase()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-ink/50">สถานะ</span>
+                <span className="rounded-full bg-teal-light px-2.5 py-0.5 text-xs font-medium text-teal-dark">
+                  {selectedBooking.status}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-ink/50">แผนกที่แนะนำ</span>
+                <span className="font-medium text-ink">{selectedBooking.recommended_department || "-"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-ink/50">ความเร่งด่วน</span>
+                <span className="font-medium text-ink">{selectedBooking.urgency || "-"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-ink/50">วันที่จอง</span>
+                <span className="font-medium text-ink">
+                  {new Date(selectedBooking.created_at).toLocaleString("th-TH")}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-ink/50">วันที่นัด</span>
+                <span className="font-medium text-ink">
+                  {selectedBooking.appointment_date || "-"} {selectedBooking.appointment_time || ""} น.
+                </span>
+              </div>
+              <div className="border-t border-line pt-3">
+                <span className="text-ink/50">อาการ</span>
+                <p className="mt-1 whitespace-pre-wrap text-ink">{selectedBooking.symptoms || "-"}</p>
+              </div>
+              {selectedBooking.ai_recommendation && (
+                <div className="border-t border-line pt-3">
+                  <span className="text-ink/50">คำแนะนำจาก AI</span>
+                  <p className="mt-1 whitespace-pre-wrap text-ink">
+                    {(() => {
+                      try {
+                        const a = JSON.parse(selectedBooking.ai_recommendation);
+                        return a.advice || selectedBooking.ai_recommendation;
+                      } catch {
+                        return selectedBooking.ai_recommendation;
+                      }
+                    })()}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </Modal>
+
+        {/* ---- Select account modal (shows first) ---- */}
+        <Modal open={showSelectModal} onClose={() => setShowSelectModal(false)} title="จองคิวให้ใคร?">
+          <p className="mb-4 text-sm text-ink/55">เลือกบัญชีที่ต้องการจองคิว จากนั้นกรอกอาการได้เลย</p>
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => { setSelectedPatientId("self"); setShowSelectModal(false); }}
+              className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition ${
+                selectedPatientId === "self"
+                  ? "border-teal bg-teal-light"
+                  : "border-line bg-surface hover:bg-teal-light"
+              }`}
+            >
+              <span className="font-medium text-ink">ตัวเอง</span>
+              {selectedPatientId === "self" && <span className="text-xs text-teal-dark">กำลังเลือก</span>}
+            </button>
+            {familyMembers.map((m) => {
+              const name = m.nickname || `${m.prefix_th || ""}${m.first_name_th || ""} ${m.last_name_th || ""}`.trim() || "ไม่ระบุชื่อ";
+              return (
+                <button
+                  key={m.memberId}
+                  type="button"
+                  onClick={() => { setSelectedPatientId(m.patientId); setShowSelectModal(false); }}
+                  className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition ${
+                    selectedPatientId === m.patientId
+                      ? "border-teal bg-teal-light"
+                      : "border-line bg-surface hover:bg-teal-light"
+                  }`}
+                >
+                  <span className="font-medium text-ink">{name}</span>
+                  {selectedPatientId === m.patientId && <span className="text-xs text-teal-dark">กำลังเลือก</span>}
+                </button>
+              );
+            })}
+          </div>
+          {familyMembers.length === 0 && (
+            <p className="mt-3 text-center text-xs text-ink/40">
+              ยังไม่มีบัญชีรอง <Link href="/family" className="text-teal-dark underline" onClick={() => setShowSelectModal(false)}>เพิ่มที่นี่</Link>
+            </p>
+          )}
+          <button
+            type="button"
+            className="btn-primary mt-4 w-full"
+            onClick={() => setShowSelectModal(false)}
+          >
+            เริ่มจองคิว
+          </button>
+        </Modal>
       </div>
 
       {/* Floating SOS 1669 */}

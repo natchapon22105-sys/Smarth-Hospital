@@ -9,6 +9,8 @@ import ocrRoutes from "./routes/ocr.routes";
 import adminRoutes from "./routes/admin.routes";
 import nurseRoutes from "./routes/nurse.routes";
 import nurseAuthRoutes from "./routes/nurse-auth.routes";
+import labRoutes from "./routes/lab.routes";
+import familyRoutes from "./routes/family.routes";
 
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:3000";
 
@@ -32,6 +34,8 @@ app.use("/api/ocr", ocrRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/nurse", nurseRoutes);
 app.use("/api/nurse-auth", nurseAuthRoutes);
+app.use("/api/lab", labRoutes);
+app.use("/api/family", familyRoutes);
 
 // 404
 app.use((req, res) => {

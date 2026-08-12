@@ -1,9 +1,12 @@
 import { Router } from "express";
 import { requireAdmin } from "../middleware/admin.middleware";
-import { getDashboard, getSettings, updateSettings, getUsageStats } from "../controllers/admin.controller";
+import { loginAdmin, getDashboard, getSettings, updateSettings, getUsageStats } from "../controllers/admin.controller";
 import { getPendingNurses, getAllNurses, approveNurse, rejectNurse, deleteNurse, getNurseActivity } from "../controllers/nurse-auth.controller";
 
 const router = Router();
+
+// Public admin login (no session required).
+router.post("/login", loginAdmin);
 
 router.use(requireAdmin);
 

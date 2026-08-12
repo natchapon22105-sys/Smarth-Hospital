@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
@@ -8,13 +8,27 @@ import { api } from "@/lib/api";
 const LINKS = [
   { href: "/patient/profile", label: "ข้อมูลส่วนตัว & ประวัติสุขภาพ" },
   { href: "/booking", label: "จองคิว" },
-  { href: "/nurse", label: "ระบบคิว (พยาบาล)" },
-  { href: "/admin", label: "ระบบจัดการ" },
+  { href: "/family", label: "บัญชีรองในครอบครัว" },
+  { href: "/lab-results", label: "ผลตรวจ" },
 ];
+
+type MeData = {
+  user: { email: string; username: string; phone: string | null; role: string };
+  patient: {
+    prefix_th: string | null;
+    first_name_th: string | null;
+    last_name_th: string | null;
+    national_id: string | null;
+    profile_image: string | null;
+  } | null;
+};
 
 export default function HamburgerMenu() {
   const [open, setOpen] = useState(false);
   const [animating, setAnimating] = useState(false);
+  const [me, setMe] = useState<MeData | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   // Lock body and prevent any interaction with content behind
@@ -25,6 +39,19 @@ export default function HamburgerMenu() {
       document.body.style.overflow = "";
     }
     return () => { document.body.style.overflow = ""; };
+  }, [open]);
+
+  // Fetch account info when menu opens
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      try {
+        const res = await api.get<MeData>("/api/auth/me");
+        setMe(res);
+      } catch {
+        // non-fatal
+      }
+    })();
   }, [open]);
 
   function handleOpen() {
@@ -45,6 +72,41 @@ export default function HamburgerMenu() {
     await api.post("/api/auth/logout");
     router.push("/login");
     router.refresh();
+  }
+
+  function handleAvatarClick() {
+    fileInputRef.current?.click();
+  }
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      alert("กรุณาเลือกไฟล์รูปภาพ");
+      return;
+    }
+    if (file.size > 1_500_000) {
+      alert("รูปใหญ่เกินไป (สูงสุด ~1.5MB)");
+      return;
+    }
+    setUploading(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      await api.put("/api/patient/profile-image", { profileImage: dataUrl });
+      // refresh me data
+      const res = await api.get<MeData>("/api/auth/me");
+      setMe(res);
+    } catch {
+      alert("อัปโหลดรูปไม่สำเร็จ");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   return (
@@ -91,6 +153,50 @@ export default function HamburgerMenu() {
               >
                 ✕
               </button>
+            </div>
+
+            {/* Account mini card */}
+            <div className="mb-5 flex items-center gap-3 rounded-xl border border-teal/20 bg-white/70 p-4">
+              <button
+                type="button"
+                onClick={handleAvatarClick}
+                disabled={uploading}
+                aria-label="เปลี่ยนรูปโปรไฟล์"
+                className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border border-teal/30 bg-teal-light"
+              >
+                {me?.patient?.profile_image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={me.patient.profile_image} alt="profile" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center font-display text-lg font-semibold text-teal-dark">
+                    {(me?.patient?.first_name_th || me?.user.username || "U").charAt(0)}
+                  </span>
+                )}
+                <span className="absolute inset-x-0 bottom-0 bg-black/40 py-0.5 text-center text-[9px] text-white">
+                  {uploading ? "..." : "แก้"}
+                </span>
+              </button>
+              <div className="min-w-0 flex-1">
+                {me ? (
+                  <>
+                    <p className="truncate font-display text-[15px] font-semibold text-ink">
+                      {`${me.patient?.prefix_th || ""}${me.patient?.first_name_th || ""} ${me.patient?.last_name_th || ""}`.trim() || me.user.username}
+                    </p>
+                    <p className="truncate text-xs text-ink/55">
+                      {me.patient?.national_id ? `เลขบัตร ${me.patient.national_id}` : "ยังไม่ระบุเลขบัตร"}
+                    </p>
+                  </>
+                ) : (
+                  <div className="h-10 animate-pulse rounded-lg bg-teal/10" />
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
             </div>
             <ul className="space-y-1">
               {LINKS.map((link) => (

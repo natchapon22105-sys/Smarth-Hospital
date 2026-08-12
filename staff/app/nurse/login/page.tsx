@@ -66,7 +66,7 @@ export default function NurseLoginPage() {
           </Link>
         </p>
         <p className="mt-2 text-center text-xs text-ink/40">
-          <Link href="/login" className="hover:underline">กลับไปหน้าเข้าสู่ระบบผู้ใช้</Link>
+          <Link href="/" className="hover:underline">กลับไปหน้าหลักผู้ใช้</Link>
         </p>
       </div>
     </main>

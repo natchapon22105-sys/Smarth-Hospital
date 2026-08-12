@@ -3,6 +3,7 @@ import { requireAuth } from "../middleware/auth.middleware";
 import {
   getProfile,
   updateProfile,
+  updateProfileImage,
   updateMedicalHistory,
   upsertEmergencyContact,
   updateInsurance,
@@ -16,6 +17,7 @@ router.use(requireAuth);
 
 router.get("/profile", getProfile);
 router.put("/profile", updateProfile);
+router.put("/profile-image", updateProfileImage);
 router.put("/medical-history", updateMedicalHistory);
 router.put("/emergency-contact", upsertEmergencyContact);
 router.put("/insurance", updateInsurance);

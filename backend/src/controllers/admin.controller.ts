@@ -1,6 +1,53 @@
 import { Request, Response } from "express";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 import { db } from "../db/db";
+import { createSession, setSessionCookie } from "../utils/session";
+import { verifyPassword } from "../utils/password";
+
+// ---------------------------------------------------------------------------
+// POST /api/admin/login   { identifier, password }   identifier = email or username
+// ---------------------------------------------------------------------------
+export async function loginAdmin(req: Request, res: Response) {
+  try {
+    const schema = z.object({
+      identifier: z.string().min(1),
+      password: z.string().min(1),
+      remember: z.boolean().optional(),
+    });
+
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "invalid_input" });
+    }
+
+    const { identifier, password, remember } = parsed.data;
+
+    const user = db
+      .prepare(`SELECT * FROM users WHERE (email = ? OR username = ?) AND role = 'admin'`)
+      .get(identifier, identifier) as any;
+
+    if (!user) {
+      return res.status(401).json({ error: "invalid_credentials", message: "ไม่พบบัญชีแอดมิน" });
+    }
+
+    const ok = await verifyPassword(password, user.password_hash);
+    if (!ok) {
+      return res.status(401).json({ error: "invalid_credentials", message: "อีเมล/ชื่อผู้ใช้ หรือรหัสผ่านไม่ถูกต้อง" });
+    }
+
+    const session = createSession(user.id, remember === true);
+    setSessionCookie(res, session.id, remember === true);
+
+    return res.json({
+      ok: true,
+      user: { id: user.id, email: user.email, username: user.username, fullName: user.full_name },
+    });
+  } catch (err) {
+    console.error("loginAdmin error:", err);
+    return res.status(500).json({ error: "server_error", message: "เข้าสู่ระบบไม่สำเร็จ" });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // GET /api/admin/dashboard — statistics

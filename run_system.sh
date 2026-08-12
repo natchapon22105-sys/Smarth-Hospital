@@ -8,6 +8,7 @@ cleanup() {
   echo "Shutting down NudMedi..."
   kill "$BACKEND_PID" 2>/dev/null || true
   kill "$FRONTEND_PID" 2>/dev/null || true
+  kill "$STAFF_PID" 2>/dev/null || true
   wait 2>/dev/null || true
   echo "NudMedi stopped."
   exit 0
@@ -50,9 +51,9 @@ for i in $(seq 1 15); do
 done
 
 # --------------------------------------------------------------------------
-# Frontend
+# Frontend (users)
 # --------------------------------------------------------------------------
-echo "[2/2] Starting frontend..."
+echo "[2/3] Starting frontend (users)..."
 cd "$SCRIPT_DIR/frontend"
 
 if [ ! -f .env.local ]; then
@@ -67,6 +68,24 @@ fi
 npm run dev &
 FRONTEND_PID=$!
 
+# --------------------------------------------------------------------------
+# Staff app (nurse + admin)
+# --------------------------------------------------------------------------
+echo "[3/3] Starting staff app (nurse + admin)..."
+cd "$SCRIPT_DIR/staff"
+
+if [ ! -f .env.local ]; then
+  cp .env.local.example .env.local
+  echo "       Created .env.local from .env.local.example"
+fi
+
+if [ ! -d node_modules ]; then
+  npm install
+fi
+
+npm run dev &
+STAFF_PID=$!
+
 # Small pause so the user can see the startup message
 sleep 2
 
@@ -74,7 +93,8 @@ echo ""
 echo "  =========================================="
 echo "    NudMedi is running"
 echo "    Backend:  http://localhost:4000"
-echo "    Frontend: http://localhost:3000"
+echo "    Frontend: http://localhost:3000  (users)"
+echo "    Staff:    http://localhost:3001  (nurse + admin)"
 echo "  =========================================="
 echo ""
 echo "  Run  ./stop_system.sh  to stop."

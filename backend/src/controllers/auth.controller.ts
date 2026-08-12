@@ -153,9 +153,25 @@ export function logout(req: Request, res: Response) {
 // GET /api/auth/me   (requireAuth)
 // ---------------------------------------------------------------------------
 export function me(req: Request, res: Response) {
-  const user = db.prepare(`SELECT id, email, username, phone FROM users WHERE id = ?`).get(req.userId);
+  const user = db.prepare(`SELECT id, email, username, phone, role FROM users WHERE id = ?`).get(req.userId) as any;
   if (!user) return res.status(404).json({ error: "not_found" });
-  return res.json({ ok: true, user, patientId: req.patientId });
+  const patient = req.patientId
+    ? db.prepare(`SELECT prefix_th, first_name_th, last_name_th, national_id, profile_image FROM patients WHERE id = ?`).get(req.patientId) as any
+    : null;
+  return res.json({
+    ok: true,
+    user: { id: user.id, email: user.email, username: user.username, phone: user.phone, role: user.role },
+    patientId: req.patientId,
+    patient: patient
+      ? {
+          prefix_th: patient.prefix_th,
+          first_name_th: patient.first_name_th,
+          last_name_th: patient.last_name_th,
+          national_id: patient.national_id,
+          profile_image: patient.profile_image,
+        }
+      : null,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -186,8 +202,13 @@ export async function forgotPassword(req: Request, res: Response) {
       `INSERT INTO otp_codes (id, phone, code_hash, purpose, expires_at) VALUES (?, ?, ?, ?, ?)`
     ).run(uuid(), user.phone, codeHash, "password_reset", expiresAt);
 
-    // Send OTP via email
-    await sendOtpEmail(email, code, "login");
+    // Send OTP via email (purpose must match what is stored + verified)
+    try {
+      await sendOtpEmail(email, code, "password_reset");
+    } catch (mailErr) {
+      console.error("forgotPassword sendOtpEmail failed:", mailErr);
+      return res.status(500).json({ error: "email_send_failed", message: "ไม่สามารถส่งอีเมล OTP ได้ กรุณาลองใหม่หรือติดต่อผู้ดูแล" });
+    }
 
     return res.json({ ok: true, message: "หากอีเมลนี้มีในระบบ รหัส OTP จะถูกส่งไป" });
   } catch (err) {

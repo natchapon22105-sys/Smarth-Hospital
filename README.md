@@ -46,9 +46,15 @@
 
 ## 📁 โครงสร้างโปรเจกต์
 
+โปรเจกต์แบ่งเป็น 3 ส่วน (monorepo) ที่แชร์ backend เดียวกัน:
+
+- **backend** (พอร์ต `4000`) — API กลาง
+- **frontend** (พอร์ต `3000`) — สำหรับผู้ใช้ทั่วไป (user)
+- **staff** (พอร์ต `3001`) — สำหรับพยาบาล (nurse) และผู้ดูแลระบบ (admin) แยกต่างหาก
+
 ```
 nudmedi 2/
-├── backend/                    # Express API
+├── backend/                    # Express API (พอร์ต 4000)
 │   ├── src/
 │   │   ├── app.ts              # ตั้งค่า Express + route
 │   │   ├── server.ts           # จุดเริ่มต้นเซิร์ฟเวอร์
@@ -58,21 +64,30 @@ nudmedi 2/
 │   │   ├── db/db.ts            # Schema + migrations (SQLite)
 │   │   └── utils/              # session, otp, password, ai.service
 │   └── data/nudmedi.db         # ฐานข้อมูล (ไม่ push ขึ้น GitHub)
-├── frontend/                   # Next.js
+├── frontend/                   # Next.js สำหรับผู้ใช้ (พอร์ต 3000)
 │   ├── app/
-│   │   ├── login/              # เข้าสู่ระบบ
+│   │   ├── login/              # เข้าสู่ระบบผู้ใช้
 │   │   ├── register/           # สมัครสมาชิก
 │   │   ├── app-home/           # หน้าเลือกบริการ
 │   │   ├── booking/            # จองคิว (AI หลายขั้นตอน)
-│   │   ├── patient/profile/    # โปรไฟล์คนไข้ + OCR
-│   │   ├── admin/              # ผู้ดูแลระบบ
-│   │   └── nurse/              # ระบบคิวพยาบาล + login/register
+│   │   └── patient/profile/    # โปรไฟล์คนไข้ + OCR
 │   ├── components/             # HamburgerMenu, ServiceCard
 │   └── lib/api.ts              # fetch wrapper
-├── run_system.sh               # เริ่มระบบ (backend + frontend)
+├── staff/                      # Next.js สำหรับพยาบาล + admin (พอร์ต 3001)
+│   ├── app/
+│   │   ├── nurse/              # ระบบคิวพยาบาล + login/register
+│   │   └── admin/              # ระบบจัดการผู้ดูแล
+│   ├── middleware.ts           # ป้องกัน /nurse, /admin (เช็ค session)
+│   └── lib/api.ts              # fetch wrapper
+├── run_system.sh               # เริ่มระบบ (backend + frontend + staff)
 ├── stop_system.sh              # หยุดระบบ
 └── push.sh                     # push code ขึ้น GitHub
 ```
+
+> 💡 **ทำไมต้องแยก `staff` ออกจาก `frontend`?**
+> พยาบาลและ admin ทำงานต่างจากผู้ใช้ทั่วไป (คิว, อนุมัติ, แดชบอร์ด) จึงแยกเป็นแอปอิสระ
+> รันพอร์ตต่างกัน แต่ทั้งคู่คุยกับ backend เดียวกันผ่าน API เดียวกัน — ข้อมูลจึงเชื่อมโยงกัน
+> ผู้ใช้ทั่วไปจะไม่เห็นเมนูพยาบาล/admin อีกต่อไป
 
 ---
 
@@ -95,8 +110,12 @@ npm install-scripts approve better-sqlite3   # macOS ใหม่
 # หรือ
 npm rebuild better-sqlite3
 
-# Frontend
+# Frontend (ผู้ใช้)
 cd ../frontend
+npm install
+
+# Staff app (พยาบาล + admin)
+cd ../staff
 npm install
 ```
 
@@ -129,7 +148,7 @@ SMTP_FROM=your.email@gmail.com
 
 > 💡 **OpenRouter API Key:** ถ้าไม่ใส่ใน `.env` จะไปดูในตาราง `system_settings` (ตั้งค่าได้จากหน้า admin → ตั้งค่าระบบ)
 
-**frontend/.env.local** (ดู `.env.local.example`):
+**frontend/.env.local** และ **staff/.env.local** (ดู `.env.local.example` ในแต่ละโฟลเดอร์):
 
 ```env
 BACKEND_ORIGIN=http://localhost:4000
@@ -139,8 +158,8 @@ BACKEND_ORIGIN=http://localhost:4000
 
 **วิธีง่าย (สคริปต์):**
 ```bash
-./run_system.sh     # เริ่ม backend (4000) + frontend (3000)
-./stop_system.sh    # หยุดทั้งสอง
+./run_system.sh     # เริ่ม backend (4000) + frontend (3000) + staff (3001)
+./stop_system.sh    # หยุดทั้งหมด
 ```
 
 **วิธีแยก:**
@@ -149,12 +168,18 @@ BACKEND_ORIGIN=http://localhost:4000
 cd backend
 npm run dev         # http://localhost:4000
 
-# Terminal 2 — Frontend
+# Terminal 2 — Frontend (ผู้ใช้)
 cd frontend
 npm run dev         # http://localhost:3000
+
+# Terminal 3 — Staff (พยาบาล + admin)
+cd staff
+npm run dev         # http://localhost:3001
 ```
 
-เปิดเบราว์เซอร์ → **http://localhost:3000**
+เปิดเบราว์เซอร์:
+- **ผู้ใช้:** http://localhost:3000
+- **พยาบาล / Admin:** http://localhost:3001 (เข้า `/nurse/login` หรือ `/admin`)
 
 ---
 
@@ -181,12 +206,13 @@ npm run dev         # http://localhost:3000
 3. ไปที่ **จองคิว** → พิมพ์/พูดอาการ (หรืออัปโหลดรูป) → ตอบคำถาม AI 5 ข้อ
 4. ดูผลวิเคราะห์ (แผนกที่แนะนำ, ระดับความเร่งด่วน) → เลือกวันและเวลา → ยืนยันการจอง
 
-### 🧑‍⚕️ พยาบาล (Nurse)
-1. เข้า `/nurse/register` → ลงทะเบียน รอ admin อนุมัติ
-2. เข้า `/nurse/login` → เข้าสู่ระบบ
+### 🧑‍⚕️ พยาบาล (Nurse) — แอป `staff` (พอร์ต 3001)
+1. เข้า `http://localhost:3001/nurse/register` → ลงทะเบียน รอ admin อนุมัติ
+2. เข้า `http://localhost:3001/nurse/login` → เข้าสู่ระบบ
 3. เลือกวันที่ → ดูรายการคิว → กด **เช็คอิน / เสร็จสิ้น / ยกเลิก** ตามสถานะคนไข้
 
-### 🛠️ ผู้ดูแลระบบ (Admin)
+### 🛠️ ผู้ดูแลระบบ (Admin) — แอป `staff` (พอร์ต 3001)
+- เข้า `http://localhost:3001/admin`
 - **แดชบอร์ด:** ดูสถิติการจอง, คนไข้, รายการล่าสุด
 - **ตั้งค่าระบบ:** จำนวนคิว/ชั่วโมง, AI model, OpenRouter API key, เวลาเปิด-ปิด, ระยะเวลาต่อคิว
 - **สถิติการใช้งาน:** ผู้ใช้, การจอง, กราฟรายเดือน
@@ -273,12 +299,12 @@ npm run dev         # http://localhost:3000
 - การคำนวณเวลาว่างอยู่ใน `backend/src/controllers/booking.controller.ts`
 
 ### 4. เปลี่ยนสี / ธีม
-ไฟล์: `frontend/app/globals.css` + `frontend/tailwind.config.ts`
+ไฟล์: `frontend/app/globals.css` + `frontend/tailwind.config.ts` (และ `staff/` ในทำนองเดียวกัน)
 - สีหลัก (teal) อยู่ใน `tailwind.config.ts` → `colors.teal`
 - คลาส CSS เช่น `.gradient-text`, `.btn-primary`, `.card`, `.field-input` อยู่ใน `globals.css`
 
 ### 5. เปลี่ยนพื้นหลัง / โลโก้
-- วางไฟล์ใน `frontend/public/` แล้วอ้างอิงในหน้า (`/logo.png`, `/usebackground.png`, `/bg-booking.png`)
+- วางไฟล์ใน `frontend/public/` หรือ `staff/public/` แล้วอ้างอิงในหน้า (`/logo.png`, `/usebackground.png`, `/bg-booking.png`)
 
 ### 6. ระยะเวลาที่ถือว่า "ออนไลน์" ของพยาบาล
 ไฟล์: `backend/src/controllers/nurse-auth.controller.ts`

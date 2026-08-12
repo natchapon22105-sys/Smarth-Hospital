@@ -1,8 +1,25 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import HamburgerMenu from "@/components/HamburgerMenu";
 import ServiceCard from "@/components/ServiceCard";
 import Image from "next/image";
+import { api } from "@/lib/api";
 
 export default function AppHomePage() {
+  const [newResults, setNewResults] = useState(0);
+
+  useEffect(() => {
+    api
+      .get<{ results: { id: string; is_read: number }[] }>("/api/lab/results")
+      .then((res) => {
+        const count = res.results.filter((r) => !r.is_read).length;
+        setNewResults(count);
+      })
+      .catch(() => setNewResults(0));
+  }, []);
+
   return (
     <main className="relative min-h-screen">
       {/* Background */}
@@ -35,6 +52,26 @@ export default function AppHomePage() {
         <h1 className="font-display text-xl font-semibold text-ink">เลือกบริการ</h1>
         <p className="mt-1 text-center text-sm text-ink/55">แตะเพื่อเริ่มใช้บริการ</p>
 
+        {newResults > 0 && (
+          <Link
+            href="/lab-results"
+            className="mt-5 flex w-full items-center gap-3 rounded-xl border border-teal/30 bg-teal-light px-4 py-3 transition hover:bg-teal/20"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal text-white">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.7 21a2 2 0 01-3.4 0" />
+              </svg>
+            </span>
+            <span className="text-sm text-ink">
+              มีผลตรวจใหม่ <strong>{newResults}</strong> รายการ รอให้คุณตรวจสอบ
+            </span>
+            <svg className="ml-auto text-teal-dark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </Link>
+        )}
+
         <div className="mt-8 grid w-full grid-cols-2 gap-4">
           <ServiceCard
             href="/booking"
@@ -48,33 +85,13 @@ export default function AppHomePage() {
             }
           />
           <ServiceCard
-            href="#"
-            label="ปรึกษาแพทย์ออนไลน์"
-            disabled
-            icon={
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M15 10c0 2.8-2.2 5-5 5H7l-3 3v-8c0-2.8 2.2-5 5-5h4c2.8 0 5 2.2 5 5z" />
-              </svg>
-            }
-          />
-          <ServiceCard
-            href="#"
+            href="/lab-results"
             label="ผลตรวจ"
-            disabled
+            alert={newResults > 0}
+            badge={newResults > 0 ? newResults : null}
             icon={
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M9 3h6v4a3 3 0 003 3v8a3 3 0 01-3 3H9a3 3 0 01-3-3v-8a3 3 0 003-3V3z" />
-              </svg>
-            }
-          />
-          <ServiceCard
-            href="#"
-            label="สั่งยาซ้ำ"
-            disabled
-            icon={
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <rect x="4" y="4" width="16" height="16" rx="3" />
-                <path d="M12 8v8M8 12h8" strokeLinecap="round" />
               </svg>
             }
           />

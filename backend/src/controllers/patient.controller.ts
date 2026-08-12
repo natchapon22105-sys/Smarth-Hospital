@@ -97,6 +97,33 @@ export function updateProfile(req: Request, res: Response) {
 }
 
 // ---------------------------------------------------------------------------
+// PUT /api/patient/profile-image   (base64 data URL)
+// ---------------------------------------------------------------------------
+const profileImageSchema = z.object({
+  profileImage: z
+    .string()
+    .regex(/^data:image\/(png|jpe?g|gif|webp);base64,/, "รูปต้องเป็น data URL (png/jpg/gif/webp)")
+    .max(2_000_000, "รูปใหญ่เกินไป (สูงสุด ~1.5MB)"),
+});
+
+export function updateProfileImage(req: Request, res: Response) {
+  const patientId = getPatientOr404(res, req.patientId);
+  if (!patientId) return;
+
+  const parsed = profileImageSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_input", details: parsed.error.flatten() });
+  }
+
+  db.prepare(`UPDATE patients SET profile_image = ?, updated_at = datetime('now') WHERE id = ?`).run(
+    parsed.data.profileImage,
+    patientId
+  );
+
+  return res.json({ ok: true });
+}
+
+// ---------------------------------------------------------------------------
 // PUT /api/patient/medical-history   (section 2)
 // ---------------------------------------------------------------------------
 const medicalHistorySchema = z.object({
