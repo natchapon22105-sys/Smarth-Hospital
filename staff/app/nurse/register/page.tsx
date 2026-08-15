@@ -64,7 +64,7 @@ export default function NurseRegisterPage() {
               <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
             </svg>
           </div>
-          <h1 className="font-display text-2xl font-semibold text-ink">ลงทะเบียนพยาบาล</h1>
+          <h1 className="font-display text-2xl font-semibold text-ink">ลงทะเบียนเวชระเบียน</h1>
           <p className="mt-1 text-sm text-ink/60">กรอกข้อมูลเพื่อขออนุมัติเข้าใช้งาน</p>
         </div>
 

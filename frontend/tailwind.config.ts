@@ -21,8 +21,8 @@ const config: Config = {
         danger: "#C24444",
       },
       fontFamily: {
-        display: ["var(--font-sarabun)", "sans-serif"],
-        body: ["var(--font-inter)", "var(--font-sarabun)", "sans-serif"],
+        display: ["var(--font-display)", "sans-serif"],
+        body: ["var(--font-body)", "var(--font-display)", "sans-serif"],
         mono: ["var(--font-mono)", "monospace"],
       },
       borderRadius: {

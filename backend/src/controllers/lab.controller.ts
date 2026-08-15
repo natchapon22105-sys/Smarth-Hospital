@@ -3,6 +3,7 @@ import { z } from "zod";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/db";
 import { sendLabResultEmail } from "../utils/mail";
+import { generateLabResultPdf } from "../utils/pdf";
 
 // requireAuth already ran - req.patientId comes from the session, never from
 // the client.
@@ -152,6 +153,22 @@ export async function createLabResult(req: Request, res: Response) {
   const patientName = patient.full_name || `${patient.prefix_th || ""}${patient.first_name_th || ""} ${patient.last_name_th || ""}`.trim();
   try {
     if (patient.email) {
+      // Generate PDF
+      const flagLabel: Record<string, string> = { normal: "ปกติ", high: "สูงกว่าเกณฑ์", low: "ต่ำกว่าเกณฑ์", critical: "วิกฤต" };
+      const pdfBuffer = await generateLabResultPdf({
+        patientName,
+        nationalId: null,
+        testName: f.test_name,
+        testDate: f.test_date,
+        category: f.category,
+        resultValue: f.result_value,
+        unit: f.unit,
+        refRange: f.ref_range,
+        flag: f.flag,
+        flagLabel: flagLabel[f.flag] || "ปกติ",
+        note: f.note,
+        doctorName: f.doctor_name,
+      });
       await sendLabResultEmail(patient.email, {
         patientName,
         testName: f.test_name,
@@ -162,7 +179,7 @@ export async function createLabResult(req: Request, res: Response) {
         refRange: f.ref_range,
         note: f.note,
         doctorName: f.doctor_name,
-      });
+      }, pdfBuffer);
     }
   } catch (mailErr) {
     console.error("[LAB] email notify failed:", mailErr);

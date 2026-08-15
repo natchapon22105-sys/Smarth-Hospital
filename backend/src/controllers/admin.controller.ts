@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { db } from "../db/db";
+import { bangkokToday } from "../utils/bangkok";
 import { createSession, setSessionCookie } from "../utils/session";
 import { verifyPassword } from "../utils/password";
 
@@ -53,7 +54,7 @@ export async function loginAdmin(req: Request, res: Response) {
 // GET /api/admin/dashboard — statistics
 // ---------------------------------------------------------------------------
 export function getDashboard(req: Request, res: Response) {
-  const today = new Date().toISOString().split("T")[0];
+  const today = bangkokToday();
 
   const totalPatients = (db.prepare(`SELECT COUNT(*) as c FROM patients`).get() as any).c;
   const totalBookings = (db.prepare(`SELECT COUNT(*) as c FROM bookings`).get() as any).c;
@@ -159,4 +160,101 @@ export function getUsageStats(req: Request, res: Response) {
     monthlyBookings,
     urgencyStats,
   });
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/admin/users — list all users with patient info
+// ---------------------------------------------------------------------------
+export function getUsers(req: Request, res: Response) {
+  const search = (req.query.search as string || "").trim();
+  let query = `
+    SELECT u.id, u.email, u.username, u.phone, u.role, u.created_at, u.last_activity,
+           p.first_name_th, p.last_name_th, p.national_id
+    FROM users u
+    LEFT JOIN patients p ON p.user_id = u.id
+  `;
+  const params: any[] = [];
+
+  if (search) {
+    query += ` WHERE u.email LIKE ? OR u.username LIKE ? OR u.phone LIKE ? OR p.first_name_th LIKE ? OR p.last_name_th LIKE ? OR p.national_id LIKE ?`;
+    const like = `%${search}%`;
+    params.push(like, like, like, like, like, like);
+  }
+
+  query += ` ORDER BY u.created_at DESC LIMIT 200`;
+
+  const users = db.prepare(query).all(...params);
+  return res.json({ ok: true, users });
+}
+
+// ---------------------------------------------------------------------------
+// PUT /api/admin/users/:id — update user info
+// ---------------------------------------------------------------------------
+const updateUserSchema = z.object({
+  email: z.string().email().optional(),
+  username: z.string().min(1).optional(),
+  phone: z.string().optional(),
+  role: z.enum(["user", "admin"]).optional(),
+});
+
+export function updateUser(req: Request, res: Response) {
+  const { id } = req.params;
+  const parsed = updateUserSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_input", details: parsed.error.flatten() });
+  }
+
+  const existing = db.prepare(`SELECT id FROM users WHERE id = ?`).get(id) as any;
+  if (!existing) {
+    return res.status(404).json({ error: "not_found", message: "ไม่พบบัญชีผู้ใช้" });
+  }
+
+  const fields = parsed.data;
+  const sets: string[] = [];
+  const vals: any[] = [];
+
+  if (fields.email !== undefined) { sets.push("email = ?"); vals.push(fields.email); }
+  if (fields.username !== undefined) { sets.push("username = ?"); vals.push(fields.username); }
+  if (fields.phone !== undefined) { sets.push("phone = ?"); vals.push(fields.phone); }
+  if (fields.role !== undefined) { sets.push("role = ?"); vals.push(fields.role); }
+
+  if (sets.length === 0) {
+    return res.status(400).json({ error: "no_fields", message: "ไม่มีข้อมูลที่จะอัปเดต" });
+  }
+
+  sets.push("updated_at = datetime('now')");
+  vals.push(id);
+
+  db.prepare(`UPDATE users SET ${sets.join(", ")}, updated_at = datetime('now') WHERE id = ?`).run(...vals);
+
+  return res.json({ ok: true });
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/admin/users/:id — delete user and related data
+// ---------------------------------------------------------------------------
+export function deleteUser(req: Request, res: Response) {
+  const { id } = req.params;
+
+  const existing = db.prepare(`SELECT id, role FROM users WHERE id = ?`).get(id) as any;
+  if (!existing) {
+    return res.status(404).json({ error: "not_found", message: "ไม่พบบัญชีผู้ใช้" });
+  }
+  if (existing.role === "admin") {
+    return res.status(403).json({ error: "cannot_delete_admin", message: "ไม่สามารถลบบัญชีแอดมินได้" });
+  }
+
+  const tx = db.transaction(() => {
+    // Delete related data
+    db.prepare(`DELETE FROM emergency_contacts WHERE patient_id IN (SELECT id FROM patients WHERE user_id = ?)`).run(id);
+    db.prepare(`DELETE FROM family_members WHERE owner_user_id = ?`).run(id);
+    db.prepare(`DELETE FROM bookings WHERE patient_id IN (SELECT id FROM patients WHERE user_id = ?)`).run(id);
+    db.prepare(`DELETE FROM lab_results WHERE patient_id IN (SELECT id FROM patients WHERE user_id = ?)`).run(id);
+    db.prepare(`DELETE FROM patients WHERE user_id = ?`).run(id);
+    db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(id);
+    db.prepare(`DELETE FROM users WHERE id = ?`).run(id);
+  });
+  tx();
+
+  return res.json({ ok: true });
 }

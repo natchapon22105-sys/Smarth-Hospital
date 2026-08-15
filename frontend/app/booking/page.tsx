@@ -66,15 +66,14 @@ export default function BookingPage() {
   // Step 3.5: schedule
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
-  const [availableSlots, setAvailableSlots] = useState<{ time: string; count: number; full: boolean }[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState("");
+  const [availableSlots, setAvailableSlots] = useState<{ time: string; count: number; full: boolean; passed?: boolean }[]>([]);
   const [maxQueuePerHour, setMaxQueuePerHour] = useState(16);
   const [slotsLoading, setSlotsLoading] = useState(false);
+  const [departments, setDepartments] = useState<{ id: string; name: string; description: string }[]>([]);
 
   // Step 4: done
   const [confirmed, setConfirmed] = useState<Booking | null>(null);
-  const [history, setHistory] = useState<Booking[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
 
   // Family / sub-accounts — book on behalf of a family member
   type FamilyMember = {
@@ -91,21 +90,20 @@ export default function BookingPage() {
   const [selectedPatientId, setSelectedPatientId] = useState<string>("self"); // "self" or patientId
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await api.get<{ bookings: Booking[] }>("/api/booking/history");
-        setHistory(res.bookings);
-      } catch {
-        // non-fatal
-      } finally {
-        setHistoryLoading(false);
-      }
-    })();
     // load family members for "book for someone else"
     (async () => {
       try {
         const res = await api.get<{ members: FamilyMember[] }>("/api/family/members");
         setFamilyMembers(res.members || []);
+      } catch {
+        // non-fatal
+      }
+    })();
+    // load departments
+    (async () => {
+      try {
+        const res = await api.get<{ departments: { id: string; name: string; description: string }[] }>("/api/admin/departments/active");
+        setDepartments(res.departments || []);
       } catch {
         // non-fatal
       }
@@ -263,8 +261,9 @@ export default function BookingPage() {
   async function handleGoToSchedule() {
     if (!analysis) return;
     setStep("schedule");
+    setSelectedDepartment("");
     // Set default date to today
-    const today = new Date().toISOString().split("T")[0];
+    const today = new Date(new Date().getTime() + 7 * 60 * 60 * 1000).toISOString().split("T")[0];
     setAppointmentDate(today);
     setAppointmentTime("");
     await fetchSlots(today);
@@ -274,7 +273,7 @@ export default function BookingPage() {
   async function fetchSlots(date: string) {
     setSlotsLoading(true);
     try {
-      const res = await api.get<{ maxQueuePerHour: number; slots: { time: string; count: number; full: boolean }[] }>(
+      const res = await api.get<{ maxQueuePerHour: number; slots: { time: string; count: number; full: boolean; passed?: boolean }[] }>(
         `/api/booking/available-slots?date=${date}`
       );
       setAvailableSlots(res.slots);
@@ -303,14 +302,13 @@ export default function BookingPage() {
     try {
       const res = await api.post<{ booking: Booking }>("/api/booking/confirm", {
         symptoms,
-        analysis,
+        analysis: { ...analysis, recommended_department: selectedDepartment || analysis.recommended_department },
         imageBase64: imageBase64 || undefined,
         appointmentDate,
         appointmentTime,
         patientId: selectedPatientId === "self" ? undefined : selectedPatientId,
       });
       setConfirmed(res.booking);
-      setHistory((prev) => [res.booking, ...prev]);
       setStep("done");
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -356,7 +354,7 @@ export default function BookingPage() {
         <div className="absolute right-[20%] bottom-[20%] text-3xl text-teal/20 animate-[spin-plus_15s_linear_infinite_2s]" style={{ transformStyle: "preserve-3d" }}>+</div>
       </div>
 
-      <header className="relative z-10 flex items-center gap-3 px-5 py-4">
+      <header className="fixed inset-x-0 top-0 z-50 flex items-center gap-3 border-b border-line bg-surface/90 px-5 py-4 backdrop-blur-md">
         <HamburgerMenu />
         <Link href="/app-home" className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface text-ink transition hover:bg-teal-light hover:text-teal-dark" aria-label="กลับหน้าเลือกบริการ">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -367,7 +365,7 @@ export default function BookingPage() {
         <span className="font-display text-base font-semibold">จองคิว</span>
       </header>
 
-      <div className="relative z-10 mx-auto max-w-lg space-y-5 px-5">
+      <div className="relative z-10 mx-auto max-w-lg space-y-5 px-5 pt-20">
         {error && (
           <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
             {error}{" "}
@@ -626,6 +624,25 @@ export default function BookingPage() {
               <p className="text-sm text-ink/80 leading-relaxed">{analysis.advice}</p>
             </div>
 
+            {/* คำเตือน */}
+            <div className="mt-4 rounded-xl border-2 border-danger bg-red-50 p-4 text-sm">
+              <div className="flex items-start gap-2.5">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0 text-danger">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <div>
+                  <p className="font-bold text-danger">คำเตือน</p>
+                  <p className="mt-1 leading-relaxed text-red-700">
+                    ผลการวิเคราะห์นี้เป็นเพียงการวิเคราะห์เบื้องต้นเท่านั้น <strong className="text-danger">ไม่ใช่การวินิจฉัยทางการแพทย์</strong>
+                    <br />
+                    กรุณาปรึกษาแพทย์ผู้เชี่ยวชาญเพื่อการวินิจฉัยที่ถูกต้อง
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
@@ -649,17 +666,45 @@ export default function BookingPage() {
         {step === "schedule" && analysis && (
           <div className="card p-6">
             <h1 className="mb-1 font-display text-lg font-semibold text-ink">เลือกวันและเวลา</h1>
-            <p className="mb-4 text-sm text-ink/55">
-              แผนก: <span className="font-medium text-teal-dark">{analysis.recommended_department}</span>
-            </p>
+
+            {/* Department selector with AI recommendation */}
+            <div className="mt-4 rounded-xl border border-teal/25 bg-teal-light p-4">
+              <label className="field-label text-teal-dark">เลือกแผนก</label>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {departments.map((dept) => {
+                  const isRecommended = dept.name === analysis.recommended_department;
+                  const isSelected = selectedDepartment === dept.name;
+                  return (
+                    <button
+                      key={dept.id}
+                      type="button"
+                      onClick={() => setSelectedDepartment(isSelected ? "" : dept.name)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                        isSelected
+                          ? "border-teal bg-teal text-white"
+                          : isRecommended
+                          ? "border-teal bg-teal/15 text-teal-dark ring-2 ring-teal/40"
+                          : "border-line bg-surface text-ink hover:bg-teal-light"
+                      }`}
+                    >
+                      {dept.name}
+                      {isRecommended && <span className="ml-1 text-[9px] font-bold uppercase opacity-70">recommend</span>}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-xs text-teal-dark/70">
+                AI แนะนำ: <span className="font-semibold">{analysis.recommended_department}</span> — {analysis.reason}
+              </p>
+            </div>
 
             {/* Date picker */}
-            <label className="field-label">เลือกวันที่</label>
+            <label className="field-label mt-4">เลือกวันที่</label>
             <input
               type="date"
               className="field-input mb-4"
               value={appointmentDate}
-              min={new Date().toISOString().split("T")[0]}
+              min={new Date(new Date().getTime() + 7 * 60 * 60 * 1000).toISOString().split("T")[0]}
               onChange={(e) => handleDateChange(e.target.value)}
             />
 
@@ -678,6 +723,7 @@ export default function BookingPage() {
                   const period = h < 12 ? "เช้า" : "บ่าย";
                   const isSelected = appointmentTime === slot.time;
                   const isFull = slot.full;
+                  const isPassed = slot.passed;
                   return (
                     <button
                       key={slot.time}
@@ -694,7 +740,7 @@ export default function BookingPage() {
                     >
                       <span className="block font-medium">{slot.time}</span>
                       <span className={`block text-[10px] ${isFull ? "text-red-500" : "opacity-60"}`}>
-                        {isFull ? "เต็ม" : `${slot.count}/${maxQueuePerHour} คน`}
+                        {isPassed ? "หมดเวลา" : isFull ? "เต็ม" : `${slot.count}/${maxQueuePerHour} คน`}
                       </span>
                     </button>
                   );
@@ -760,105 +806,6 @@ export default function BookingPage() {
             </button>
           </div>
         )}
-
-        {/* ---- Booking History ---- */}
-        <section>
-          <h2 className="mb-3 font-display text-[15px] font-semibold text-ink">ประวัติการจอง</h2>
-          {historyLoading ? (
-            <p className="text-sm text-ink/50">กำลังโหลด...</p>
-          ) : history.length === 0 ? (
-            <p className="text-sm text-ink/50">ยังไม่มีประวัติการจอง</p>
-          ) : (
-            <ul className="space-y-2">
-              {history.map((b) => (
-                <li key={b.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedBooking(b)}
-                    className="card flex w-full items-center justify-between px-4 py-3 text-left text-sm transition hover:border-teal hover:bg-teal-light"
-                  >
-                    <div>
-                      <span>{new Date(b.created_at).toLocaleString("th-TH")}</span>
-                      {b.recommended_department && (
-                        <span className="ml-2 text-xs text-teal-dark">{b.recommended_department}</span>
-                      )}
-                      {b.appointment_date && (
-                        <p className="mt-0.5 text-[11px] text-ink/45">
-                          นัด: {b.appointment_date} {b.appointment_time}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-ink/60">{b.status}</span>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-ink/30">
-                        <polyline points="9 18 15 12 9 6" />
-                      </svg>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* ---- Booking Detail Modal ---- */}
-        <Modal open={!!selectedBooking} onClose={() => setSelectedBooking(null)} title="รายละเอียดการจอง">
-          {selectedBooking && (
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-ink/50">หมายเลขคิว</span>
-                <span className="font-mono font-semibold text-teal-dark">
-                  {selectedBooking.id.slice(0, 8).toUpperCase()}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-ink/50">สถานะ</span>
-                <span className="rounded-full bg-teal-light px-2.5 py-0.5 text-xs font-medium text-teal-dark">
-                  {selectedBooking.status}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-ink/50">แผนกที่แนะนำ</span>
-                <span className="font-medium text-ink">{selectedBooking.recommended_department || "-"}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-ink/50">ความเร่งด่วน</span>
-                <span className="font-medium text-ink">{selectedBooking.urgency || "-"}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-ink/50">วันที่จอง</span>
-                <span className="font-medium text-ink">
-                  {new Date(selectedBooking.created_at).toLocaleString("th-TH")}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-ink/50">วันที่นัด</span>
-                <span className="font-medium text-ink">
-                  {selectedBooking.appointment_date || "-"} {selectedBooking.appointment_time || ""} น.
-                </span>
-              </div>
-              <div className="border-t border-line pt-3">
-                <span className="text-ink/50">อาการ</span>
-                <p className="mt-1 whitespace-pre-wrap text-ink">{selectedBooking.symptoms || "-"}</p>
-              </div>
-              {selectedBooking.ai_recommendation && (
-                <div className="border-t border-line pt-3">
-                  <span className="text-ink/50">คำแนะนำจาก AI</span>
-                  <p className="mt-1 whitespace-pre-wrap text-ink">
-                    {(() => {
-                      try {
-                        const a = JSON.parse(selectedBooking.ai_recommendation);
-                        return a.advice || selectedBooking.ai_recommendation;
-                      } catch {
-                        return selectedBooking.ai_recommendation;
-                      }
-                    })()}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </Modal>
 
         {/* ---- Select account modal (shows first) ---- */}
         <Modal open={showSelectModal} onClose={() => setShowSelectModal(false)} title="จองคิวให้ใคร?">

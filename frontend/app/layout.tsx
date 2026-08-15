@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
-import { Sarabun, Inter, IBM_Plex_Mono } from "next/font/google";
+import { IBM_Plex_Sans_Thai, Inter, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import Footer from "@/components/Footer";
 
-const sarabun = Sarabun({
+const ibmPlexSansThai = IBM_Plex_Sans_Thai({
   subsets: ["thai", "latin"],
   weight: ["400", "500", "600", "700"],
-  variable: "--font-sarabun",
+  variable: "--font-display",
 });
 
 const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-body",
 });
 
 const mono = IBM_Plex_Mono({
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="th">
-      <body className={`${sarabun.variable} ${inter.variable} ${mono.variable} font-body bg-bg text-ink antialiased`}>
+      <body className={`${ibmPlexSansThai.variable} ${inter.variable} ${mono.variable} font-body bg-bg text-ink antialiased`}>
         {children}
         <Footer />
       </body>

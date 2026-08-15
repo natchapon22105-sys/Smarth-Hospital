@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 
 export default function AppHomePage() {
   const [newResults, setNewResults] = useState(0);
+  const [upcomingCount, setUpcomingCount] = useState(0);
 
   useEffect(() => {
     function load() {
@@ -19,11 +20,19 @@ export default function AppHomePage() {
           setNewResults(count);
         })
         .catch(() => setNewResults(0));
+      // โหลดนัดหมายที่กำลังจะมาถึง
+      api
+        .get<{ appointments: any[] }>("/api/booking/appointments")
+        .then((res) => setUpcomingCount(res.appointments.filter((a: any) => !a.is_read).length))
+        .catch(() => setUpcomingCount(0));
     }
     load();
-    // Re-fetch เมื่อมี custom event "lab-results-read" (dispatch จาก lab-results page)
     window.addEventListener("lab-results-read", load);
-    return () => window.removeEventListener("lab-results-read", load);
+    window.addEventListener("appointments-read", load);
+    return () => {
+      window.removeEventListener("lab-results-read", load);
+      window.removeEventListener("appointments-read", load);
+    };
   }, []);
 
   return (
@@ -56,7 +65,7 @@ export default function AppHomePage() {
 
       <section className="relative z-10 mx-auto flex max-w-md flex-col items-center px-5 pt-10">
         <h1 className="font-display text-xl font-semibold text-ink">เลือกบริการ</h1>
-        <p className="mt-1 text-center text-sm text-ink/55">แตะเพื่อเริ่มใช้บริการ</p>
+        <p className="mt-1 text-center text-sm text-ink/55">แตะเพื่อเริ่มใช้บริการ ของ NudMedi</p>
 
         {newResults > 0 && (
           <Link
@@ -80,13 +89,26 @@ export default function AppHomePage() {
 
         <div className="mt-8 grid w-full grid-cols-2 gap-4">
           <ServiceCard
+            href="/appointments"
+            label="นัดหมาย"
+            alert={upcomingCount > 0}
+            badge={upcomingCount > 0 ? upcomingCount : null}
+            icon={
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <rect x="3" y="5" width="18" height="16" rx="2" />
+                <path d="M8 3v4M16 3v4M3 10h18" strokeLinecap="round" />
+                <path d="M9 15l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            }
+          />
+          <ServiceCard
             href="/booking"
             label="จองคิว"
             icon={
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <rect x="3" y="5" width="18" height="16" rx="2" />
                 <path d="M8 3v4M16 3v4M3 10h18" strokeLinecap="round" />
-                <path d="M9 15l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="12" cy="15" r="2.5" strokeLinecap="round" />
               </svg>
             }
           />
@@ -98,6 +120,17 @@ export default function AppHomePage() {
             icon={
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M9 3h6v4a3 3 0 003 3v8a3 3 0 01-3 3H9a3 3 0 01-3-3v-8a3 3 0 003-3V3z" />
+              </svg>
+            }
+          />
+          <ServiceCard
+            href="/booking/history"
+            label="ประวัติการจอง"
+            icon={
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                <path d="M14 2v6h6" strokeLinecap="round" />
+                <path d="M9 13h6M9 17h6" strokeLinecap="round" />
               </svg>
             }
           />

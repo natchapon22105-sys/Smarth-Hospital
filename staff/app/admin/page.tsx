@@ -35,10 +35,17 @@ const SYSTEMS = [
   },
   {
     id: "send-lab",
-    title: "ส่งผลตรวจ",
-    desc: "ค้นหาคนไข้ และส่งผลตรวจทางอีเมล",
+    title: "จัดการคนไข้",
+    desc: "ค้นหาคนไข้ ส่งผลตรวจ และนัดหมาย",
     icon: <path d="M9 3h6v4a3 3 0 003 3v8a3 3 0 01-3 3H9a3 3 0 01-3-3v-8a3 3 0 003-3V3z" />,
     href: "/admin/send-lab",
+  },
+  {
+    id: "users",
+    title: "จัดการบัญชีผู้ใช้",
+    desc: "ดู แก้ไข และลบบัญชีผู้ใช้ทั้งหมด",
+    icon: <><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="8.5" cy="7" r="4" /><path d="M20 8v6" /><path d="M23 11h-6" /></>,
+    href: "/admin/users",
   },
 ];
 
@@ -75,42 +82,49 @@ export default function AdminHomePage() {
   }, [checking]);
 
   return (
-    <main className="relative min-h-screen overflow-hidden">
-      <div
-        className="pointer-events-none fixed inset-0 -z-10 animate-bg-pan bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: 'url("/usebackground.png")' }}
-      />
-      <div className="pointer-events-none fixed inset-0 -z-10 bg-gradient-to-br from-navy-deeper via-navy-dark to-navy" />
-      <div className="pointer-events-none fixed inset-0 -z-10 animate-pulse-glow bg-[radial-gradient(circle_at_30%_20%,rgba(59,130,246,0.25),transparent_55%)]" />
+    <main className="relative min-h-screen overflow-hidden bg-white">
+      {/* Floating circles with + */}
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute -left-10 -top-10 h-40 w-40 animate-float-1 rounded-full border-2 border-teal/20" />
+        <div className="absolute left-1/4 top-1/3 h-24 w-24 animate-float-2 rounded-full border-2 border-teal/15" />
+        <div className="absolute right-[15%] top-[10%] h-32 w-32 animate-float-3 rounded-full border-2 border-teal/10" />
+        <div className="absolute bottom-[20%] right-[10%] h-20 w-20 animate-float-4 rounded-full border-2 border-teal/15" />
+        {/* Plus signs */}
+        <span className="absolute left-[8%] top-[15%] animate-float-1 text-2xl font-light text-teal/10">+</span>
+        <span className="absolute right-[20%] top-[30%] animate-float-2 text-3xl font-light text-teal/10">+</span>
+        <span className="absolute left-[30%] bottom-[25%] animate-float-3 text-xl font-light text-teal/10">+</span>
+        <span className="absolute right-[5%] bottom-[10%] animate-float-4 text-2xl font-light text-teal/10">+</span>
+        <span className="absolute left-[60%] top-[5%] animate-float-2 text-lg font-light text-teal/10">+</span>
+      </div>
 
-      <header className="flex animate-fade-in-up items-center gap-3 border-b border-white/10 bg-navy/40 px-5 py-4 backdrop-blur-md">
-        <span className="font-display text-lg font-semibold text-white/90 drop-shadow">ระบบจัดการแอดมิน</span>
+      <header className="flex animate-fade-in-up items-center gap-3 border-b border-line bg-white px-5 py-4">
+        <span className="font-display text-lg font-semibold text-ink">ระบบจัดการแอดมิน</span>
       </header>
 
       <div className="mx-auto max-w-3xl px-5 py-10 animate-fade-in-up">
         {error && (
-          <p className="mb-4 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-300">{error}</p>
+          <p className="mb-4 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-500">{error}</p>
         )}
 
         {checking ? (
-          <p className="text-sm text-white/50">กำลังตรวจสอบสิทธิ์...</p>
+          <p className="text-sm text-ink/50">กำลังตรวจสอบสิทธิ์...</p>
         ) : (
           <>
-            <h1 className="mb-2 font-display text-2xl font-semibold text-white drop-shadow">
+            <h1 className="mb-2 font-display text-2xl font-semibold text-ink">
               เลือกระบบที่ต้องการจัดการ
             </h1>
-            <p className="mb-4 text-sm text-white/60">เลือกเข้าสู่แต่ละระบบด้านล่างนี้</p>
+            <p className="mb-4 text-sm text-ink/60">เลือกเข้าสู่แต่ละระบบด้านล่างนี้</p>
 
             {/* Nurse online status banner */}
-            <div className="mb-6 flex items-center gap-3 rounded-xl2 border border-white/10 bg-navy/40 px-4 py-3 shadow-navy-card backdrop-blur-md">
+            <div className="mb-6 flex items-center gap-3 rounded-xl2 border border-line bg-teal-light/50 px-4 py-3">
               <span className="relative flex h-3 w-3">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
                 <span className="relative inline-flex h-3 w-3 rounded-full bg-green-500"></span>
               </span>
-              <p className="text-sm text-white/80">
-                พยาบาลที่กำลังทำงานอยู่:{" "}
-                <span className="font-semibold text-green-400">{onlineNurses}</span> คน
-                <span className="text-white/40"> (จากทั้งหมด {totalNurses} คน)</span>
+              <p className="text-sm text-ink/80">
+                เวชระเบียนที่กำลังทำงานอยู่:{" "}
+                <span className="font-semibold text-green-600">{onlineNurses}</span> คน
+                <span className="text-ink/40"> (จากทั้งหมด {totalNurses} คน)</span>
               </p>
             </div>
 
@@ -119,16 +133,16 @@ export default function AdminHomePage() {
                 <button
                   key={s.id}
                   onClick={() => router.push(s.href)}
-                  className="group flex items-start gap-4 rounded-xl2 border border-white/10 bg-navy/40 p-5 text-left shadow-navy-card backdrop-blur-md transition hover:border-navy-accent/50 hover:bg-navy/60"
+                  className="group flex items-start gap-4 rounded-xl2 border border-line bg-white p-5 text-left shadow-sm transition hover:border-teal/30 hover:shadow-md"
                 >
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-navy-accent/15 text-navy-accent shadow-navy-glow">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-teal-light text-teal">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                       {s.icon}
                     </svg>
                   </div>
                   <div>
-                    <p className="font-display text-base font-semibold text-white/90 group-hover:text-white">{s.title}</p>
-                    <p className="mt-1 text-sm text-white/55">{s.desc}</p>
+                    <p className="font-display text-base font-semibold text-ink group-hover:text-teal-dark">{s.title}</p>
+                    <p className="mt-1 text-sm text-ink/55">{s.desc}</p>
                   </div>
                 </button>
               ))}
@@ -141,7 +155,7 @@ export default function AdminHomePage() {
                   router.push("/admin/login");
                   router.refresh();
                 }}
-                className="text-sm text-white/40 transition hover:text-red-300"
+                className="text-sm text-ink/40 transition hover:text-red-500"
               >
                 ออกจากระบบ
               </button>
@@ -150,5 +164,5 @@ export default function AdminHomePage() {
         )}
       </div>
     </main>
-  );
+  ); 
 }

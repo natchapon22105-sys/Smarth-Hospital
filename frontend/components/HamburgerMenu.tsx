@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
 const LINKS = [
+  { href: "/appointments", label: "นัดหมายของฉัน" },
   { href: "/patient/profile", label: "ข้อมูลส่วนตัว & ประวัติสุขภาพ" },
   { href: "/booking", label: "จองคิว" },
+  { href: "/booking/history", label: "ประวัติการจอง" },
   { href: "/family", label: "บัญชีรองในครอบครัว" },
   { href: "/lab-results", label: "ผลตรวจ" },
 ];

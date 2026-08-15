@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { db } from "../db/db";
 
 const MODEL = process.env.OPENROUTER_MODEL || "gpt-4o-mini";
 
@@ -21,7 +22,28 @@ function getClient(): OpenAI {
   return _openai;
 }
 
-const SYSTEM_PROMPT = `คุณคือแพทย์ผู้เชี่ยวชาญของโรงพยาบาล พูดภาษาไทย เป็นกันเอง ใช้ภาษาเข้าใจง่าย
+/** ดึงรายชื่อแผนกที่ active จาก DB เพื่อใช้ใน AI prompt */
+function getDepartmentsList(): string {
+  try {
+    const depts = db
+      .prepare(`SELECT name, description FROM departments WHERE is_active = 1 ORDER BY sort_order ASC`)
+      .all() as { name: string; description: string }[];
+    if (depts.length === 0) return "";
+    return depts
+      .map((d) => `- ${d.name}${d.description ? `: ${d.description}` : ""}`)
+      .join("\n");
+  } catch {
+    return "";
+  }
+}
+
+function buildSystemPrompt(): string {
+  const deptList = getDepartmentsList();
+  const deptSection = deptList
+    ? `\n\n## แผนกของโรงพยาบาล\nโรงพยาบาลมีแผนกดังต่อไปนี้ กรุณาเลือกแผนกที่เหมาะสมที่สุดจากรายการนี้เท่านั้น:\n${deptList}`
+    : "";
+
+  return `คุณคือแพทย์ผู้เชี่ยวชาญของโรงพยาบาล พูดภาษาไทย เป็นกันเอง ใช้ภาษาเข้าใจง่าย
 
 ## ขั้นตอนที่ 1 — ซักประวัติ (ตั้งคำถาม 5 ข้อ)
 เมื่อได้รับอาการ รูปภาพ (ถ้ามี) และข้อมูลสุขภาพที่มีอยู่แล้วของผู้ป่วย ให้ตั้งคำถาม 5 ข้อ ที่จำเป็นเพื่อให้ได้ข้อมูลเพียงพอสำหรับการวินิจฉัยเบื้องต้น
@@ -42,13 +64,13 @@ const SYSTEM_PROMPT = `คุณคือแพทย์ผู้เชี่ย
 3. มีอาการอื่นร่วมด้วยหรือไม่ (เช่น คลื่นไส้ เวียนหัว มีไข้)
 4. ประวัติโรคประจำตัว หรือยาที่ทานเป็นประจำ หรือประวัติการแพ้ยา (ถามเฉพาะเมื่อระบบยังไม่มีข้อมูล)
 5. พฤติกรรมเสี่ยง หรือสาเหตุที่คิดว่าทำให้เกิดอาการ หรือเคยไปพบแพทย์มาก่อนหรือไม่
-
+${deptSection}
 ## ขั้นตอนที่ 2 — วิเคราะห์และแนะนำ (ละเอียดเหมือนหมอจริง)
 เมื่อได้ข้อมูลครบแล้ว ให้วิเคราะห์และตอบในรูปแบบ JSON เท่านั้น (ห้ามมีข้อความอื่นนอก JSON):
 {
   "summary": "สรุปอาการโดยละเอียด วิเคราะห์สาเหตุที่เป็นไปได้ พร้อมเหตุผลทางการแพทย์",
   "differential_diagnosis": ["การวินิจฉัยแยกโรคที่เป็นไปได้ 2-3 ข้อ"],
-  "recommended_department": "แผนกที่ควรไปรับการรักษา",
+  "recommended_department": "แผนกที่ควรไปรับการรักษา (เลือกจากรายการแผนกของโรงพยาบาลเท่านั้น)",
   "urgency": "emergency | urgent | routine | non_urgent",
   "urgency_label": "ฉุกเฉิน | เร่งด่วน | ทั่วไป | ไม่เร่งด่วน",
   "reason": "เหตุผลทางการแพทย์ที่แนะนำแผนกนี้ พร้อมข้อควรสังเกต",
@@ -56,6 +78,7 @@ const SYSTEM_PROMPT = `คุณคือแพทย์ผู้เชี่ย
   "red_flags": "อาการอันตรายที่ควรไปโรงพยาบาลทันที ถ้ามี",
   "advice": "คำแนะนำเพิ่มเติมสำหรับการเตรียมตัวไปพบแพทย์"
 }`;
+}
 
 /**
  * Step 1: Send symptoms + optional image, get 5 questions from AI.
@@ -67,7 +90,7 @@ export async function askFollowUpQuestions(
   imageBase64?: string
 ): Promise<{ questions: string[] }> {
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: buildSystemPrompt() },
   ];
 
   const instruction = medicalSummary && !medicalSummary.includes("ไม่มีข้อมูล")
@@ -129,7 +152,7 @@ export async function getFinalAnalysis(
   advice: string;
 }> {
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-    { role: "system", content: SYSTEM_PROMPT + "\n\nตอนนี้คุณมีข้อมูลครบถ้วนแล้ว กรุณาวิเคราะห์อย่างละเอียดเหมือนแพทย์จริง และตอบเป็น JSON เท่านั้น" },
+    { role: "system", content: buildSystemPrompt() + "\n\nตอนนี้คุณมีข้อมูลครบถ้วนแล้ว กรุณาวิเคราะห์อย่างละเอียดเหมือนแพทย์จริง และตอบเป็น JSON เท่านั้น" },
   ];
 
   const extraInfo = medicalSummary && !medicalSummary.includes("ไม่มีข้อมูล")

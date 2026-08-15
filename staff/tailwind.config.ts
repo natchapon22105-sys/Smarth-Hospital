@@ -28,8 +28,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        display: ["var(--font-sarabun)", "sans-serif"],
-        body: ["var(--font-inter)", "var(--font-sarabun)", "sans-serif"],
+        display: ["var(--font-display)", "sans-serif"],
+        body: ["var(--font-body)", "var(--font-display)", "sans-serif"],
         mono: ["var(--font-mono)", "monospace"],
       },
       borderRadius: {
@@ -58,12 +58,35 @@ const config: Config = {
           "0%": { backgroundPosition: "-200% 0" },
           "100%": { backgroundPosition: "200% 0" },
         },
+        "float-circle-1": {
+          "0%, 100%": { transform: "translate(0, 0) scale(1)", opacity: "0.15" },
+          "25%": { transform: "translate(30px, -40px) scale(1.1)", opacity: "0.25" },
+          "50%": { transform: "translate(60px, 10px) scale(0.9)", opacity: "0.15" },
+          "75%": { transform: "translate(20px, 50px) scale(1.05)", opacity: "0.2" },
+        },
+        "float-circle-2": {
+          "0%, 100%": { transform: "translate(0, 0) scale(1)", opacity: "0.12" },
+          "33%": { transform: "translate(-40px, 30px) scale(1.15)", opacity: "0.22" },
+          "66%": { transform: "translate(-10px, -50px) scale(0.85)", opacity: "0.15" },
+        },
+        "float-circle-3": {
+          "0%, 100%": { transform: "translate(0, 0) rotate(0deg)", opacity: "0.1" },
+          "50%": { transform: "translate(50px, -30px) rotate(180deg)", opacity: "0.2" },
+        },
+        "float-circle-4": {
+          "0%, 100%": { transform: "translate(0, 0) scale(1)", opacity: "0.08" },
+          "50%": { transform: "translate(-30px, 40px) scale(1.2)", opacity: "0.18" },
+        },
       },
       animation: {
         "fade-in-up": "fade-in-up 0.5s ease-out both",
         "bg-pan": "bg-pan 24s ease-in-out infinite",
         "pulse-glow": "pulse-glow 4s ease-in-out infinite",
         "shimmer": "shimmer 2.5s linear infinite",
+        "float-1": "float-circle-1 18s ease-in-out infinite",
+        "float-2": "float-circle-2 22s ease-in-out infinite",
+        "float-3": "float-circle-3 15s ease-in-out infinite",
+        "float-4": "float-circle-4 20s ease-in-out infinite",
       },
     },
   },

@@ -239,7 +239,7 @@ export default function AdminNursesPage() {
               </div>
               <div>
                 <p className="text-white/50">เข้าร่วมเมื่อ</p>
-                <p className="text-white/90">{selectedNurse.created_at ? new Date(selectedNurse.created_at).toLocaleString("th-TH") : "-"}</p>
+                <p className="text-white/90">{selectedNurse.created_at ? new Date(selectedNurse.created_at + "Z").toLocaleString("th-TH", { timeZone: "Asia/Bangkok" }) : "-"}</p>
               </div>
               <div>
                 <p className="text-white/50">เข้าสู่ระบบล่าสุด</p>
@@ -260,7 +260,7 @@ export default function AdminNursesPage() {
                       <div className="flex items-center justify-between">
                         <span className="text-white/80">{a.action || a.activity_type || "-"}</span>
                         <span className="text-xs text-white/40">
-                          {a.created_at ? new Date(a.created_at).toLocaleString("th-TH") : ""}
+                          {a.created_at ? new Date(a.created_at + "Z").toLocaleString("th-TH", { timeZone: "Asia/Bangkok" }) : ""}
                         </span>
                       </div>
                       {a.detail && <p className="mt-1 text-xs text-white/50">{a.detail}</p>}

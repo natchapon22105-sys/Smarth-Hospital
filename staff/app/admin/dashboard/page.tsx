@@ -125,7 +125,7 @@ export default function AdminDashboardPage() {
                         onClick={() => setSelectedBooking(b)}
                         className="cursor-pointer border-b border-white/5 transition hover:bg-white/5"
                       >
-                        <td className="py-2 pr-3 text-white/70">{new Date(b.created_at).toLocaleString("th-TH")}</td>
+                        <td className="py-2 pr-3 text-white/70">{new Date(b.created_at + "Z").toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}</td>
                         <td className="py-2 pr-3 text-white/70">{b.username || b.email}</td>
                         <td className="py-2 pr-3 text-navy-accent">{b.recommended_department || "-"}</td>
                         <td className="py-2 pr-3">
@@ -177,7 +177,7 @@ export default function AdminDashboardPage() {
               </div>
               <div>
                 <p className="text-white/50">วันที่สร้าง</p>
-                <p className="text-white/90">{new Date(selectedBooking.created_at).toLocaleString("th-TH")}</p>
+                <p className="text-white/90">{new Date(selectedBooking.created_at + "Z").toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}</p>
               </div>
             </div>
             <div>

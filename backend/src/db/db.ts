@@ -137,6 +137,7 @@ const migrations = [
   `ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'`,
   `ALTER TABLE users ADD COLUMN last_activity TEXT`,
   `ALTER TABLE users ADD COLUMN full_name TEXT`,
+  `ALTER TABLE bookings ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0`,
 ];
 
 for (const sql of migrations) {
@@ -221,6 +222,42 @@ function addColumnIfMissing(table: string, column: string, definition: string) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
   if (!cols.some((c) => c.name === column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+// Departments table — กำหนดแผนกและขอบเขตการรักษาของโรงพยาบาล
+db.exec(`
+CREATE TABLE IF NOT EXISTS departments (
+  id            TEXT PRIMARY KEY,
+  name          TEXT UNIQUE NOT NULL,              -- ชื่อแผนก เช่น "อายุรกรรม"
+  description   TEXT,                               -- รายละเอียด/ขอบเขตการรักษา
+  is_active     INTEGER NOT NULL DEFAULT 1,         -- เปิดใช้งานหรือไม่
+  sort_order    INTEGER NOT NULL DEFAULT 0,         -- ลำดับการจัดเรียง
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+)
+`);
+
+// Seed default departments if empty
+const deptCount = db.prepare(`SELECT COUNT(*) as c FROM departments`).get() as any;
+if (deptCount.c === 0) {
+  const insertDept = db.prepare(`INSERT INTO departments (id, name, description, sort_order) VALUES (?, ?, ?, ?)`);
+  const defaultDepts = [
+    ["อายุรกรรม", "รักษาโรคทั่วไปของผู้ใหญ่ โรคภายใน โรคเรื้อรัง เช่น ความดัน เบาหวาน ไขมัน", 1],
+    ["ศัลยกรรม", "รักษาโรคที่ต้องผ่าตัด ุบัติเหตุ แผลไฟไหม้ เนื้องอก ถุงน้ำดี ไส้ติ่ง", 2],
+    ["กุมารเวช", "รักษาโรคในเด็ก ตั้งแต่แรกเกิดถึง 15 ปี วัคซีน พัฒนาการเด็ก", 3],
+    ["สูติ-นรีเวช", "ฝากครรภ์ คลอดบุตร ตรวจมะเร็งปากมดลูก โรคสตรี ประจำเดือนผิดปกติ", 4],
+    ["กระดูกและข้อ", "รักษาโรคกระดูก ข้อต่อ กล้ามเนื้อ เส้นเอ็น อุบัติเหตุทางกระดูก หมอนรองกระดูก", 5],
+    ["ตา หู คอ จมูก", "ตรวจวัดสายตา โรคตา โรคหู โรคคอ โรคจมูก ผ่าตัดต้อกระจก แก้วหูทะลุ", 6],
+    ["ทันตกรรม", "ตรวจฟัน อุดฟัน ถอนฟัน ผ่าฟันคุด ขูดหินปูน รักษารากฟัน", 7],
+    ["ผิวหนัง", "รักษาโรคผิวหนัง สิว ผื่น แพ้ ผมร่วง โรคติดต่อทางผิวหนัง เลเซอร์", 8],
+    ["จิตเวช", "ปรึกษาปัญหาสุขภาพจิต ซึมเศร้า วิตกกังวล นอนไม่หลับ เครียด", 9],
+    ["อายุรศาสตร์ฉุกเฉิน", "ภาวะฉุกเฉินทางอายุรกรรม หัวใจวาย หลอดเลือดสมอง วิกฤต", 10],
+    ["เวชศาสตร์ฟื้นฟู", "กายภาพบำบัด ฟื้นฟูสภาพหลังเจ็บป่วยหรือผ่าตัด การพูด การกลืน", 11],
+    ["รังสีวิทยา", "เอกซเรย์ อัลตราซาวนด์ ซีทีสแกน เอ็มอาร์ไอ เพื่อวินิจฉัยโรค", 12],
+    ["ห้องปฏิบัติการ", "ตรวจเลือด ตรวจปัสสาวะ ตรวจสารคัดหลั่ง ตรวจทางจุลชีววิทยา", 13],
+  ];
+  for (const [name, desc, order] of defaultDepts) {
+    insertDept.run(name, name, desc, order);
   }
 }
 

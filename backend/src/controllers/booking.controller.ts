@@ -3,6 +3,8 @@ import { v4 as uuid } from "uuid";
 import { z } from "zod";
 import { db } from "../db/db";
 import { askFollowUpQuestions, getFinalAnalysis } from "../utils/ai.service";
+import { sendBookingConfirmationEmail, sendAppointmentEmail } from "../utils/mail";
+import { generateBookingTicketPdf, generateAppointmentPdf } from "../utils/pdf";
 
 // requireAuth already ran - req.patientId comes from the session, never from
 // the client.
@@ -173,6 +175,57 @@ export async function confirmBooking(req: Request, res: Response) {
   tx();
 
   const booking = db.prepare(`SELECT * FROM bookings WHERE id = ?`).get(bookingId);
+
+  // Send confirmation email with PDF ticket + appointment notification (best-effort)
+  try {
+    const patient = db.prepare(
+      `SELECT p.prefix_th, p.first_name_th, p.last_name_th, u.email, u.full_name
+       FROM patients p JOIN users u ON p.user_id = u.id WHERE p.id = ?`
+    ).get(targetPatientId) as any;
+    if (patient?.email) {
+      const patientName = patient.full_name || `${patient.prefix_th || ""}${patient.first_name_th || ""} ${patient.last_name_th || ""}`.trim();
+      const dept = analysis.recommended_department;
+      const queueNumber = bookingId.slice(0, 8).toUpperCase();
+
+      // Booking ticket PDF
+      const ticketPdf = await generateBookingTicketPdf({
+        patientName,
+        queueNumber,
+        department: dept,
+        appointmentDate,
+        appointmentTime,
+        urgency: analysis.urgency,
+        symptoms,
+      });
+      await sendBookingConfirmationEmail(patient.email, {
+        patientName,
+        queueNumber,
+        department: dept,
+        appointmentDate,
+        appointmentTime,
+        urgency: analysis.urgency,
+      }, ticketPdf);
+
+      // Appointment notification PDF
+      const apptPdf = await generateAppointmentPdf({
+        patientName,
+        department: dept,
+        appointmentDate,
+        appointmentTime,
+        note: null,
+      });
+      await sendAppointmentEmail(patient.email, {
+        patientName,
+        department: dept,
+        appointmentDate,
+        appointmentTime,
+        note: null,
+      }, apptPdf);
+    }
+  } catch (mailErr) {
+    console.error("[BOOKING] email notify failed:", mailErr);
+  }
+
   return res.status(201).json({ ok: true, booking });
 }
 
@@ -183,8 +236,6 @@ export async function confirmBooking(req: Request, res: Response) {
 const BUSINESS_HOURS = ["08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30"];
 
 export function getAvailableSlots(req: Request, res: Response) {
-  if (!req.patientId) return res.status(404).json({ error: "no_patient_record" });
-
   const date = req.query.date as string;
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return res.status(400).json({ error: "invalid_date", message: "รูปแบบวันที่ไม่ถูกต้อง (YYYY-MM-DD)" });
@@ -208,14 +259,123 @@ export function getAvailableSlots(req: Request, res: Response) {
   const countByHour: Record<string, number> = {};
   for (const row of counts) countByHour[row.hour] = row.c;
 
-  // Build slot list with count + full flag
+  // เวลาปัจจุบันในประเทศไทย
+  const now = new Date(new Date().getTime() + 7 * 60 * 60 * 1000);
+  const currentHour = now.getUTCHours(); // ใช้ UTC เพราะเรา +7 ไปแล้ว
+  const currentMinute = now.getUTCMinutes();
+  const currentTimeStr = `${String(currentHour).padStart(2, "0")}:${String(currentMinute).padStart(2, "0")}`;
+  const isToday = date === now.toISOString().split("T")[0];
+
+  // Build slot list with count + full flag + passed flag
   const slots = BUSINESS_HOURS.map((time) => {
     const hour = time.split(":")[0];
     const count = countByHour[hour] || 0;
-    return { time, count, full: count >= maxQueuePerHour };
+    // ถ้าเป็นวันนี้และเลยเวลาแล้ว ให้ปิดไม่ให้จอง
+    const passed = isToday && time < currentTimeStr;
+    return { time, count, full: count >= maxQueuePerHour || passed, passed };
   });
 
   return res.json({ ok: true, maxQueuePerHour, slots });
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/admin/bookings/create   (staff creates booking for patient)
+// Requires admin session (requireAdmin sets req.userId but NOT req.patientId)
+// Body: { patientId, symptoms, appointmentDate, appointmentTime,
+//         urgency?, recommendedDepartment?, note? }
+// ---------------------------------------------------------------------------
+const staffBookingSchema = z.object({
+  patientId: z.string().min(1, "กรุณาเลือกคนไข้"),
+  symptoms: z.string().min(1, "กรุณากรอกอาการ"),
+  appointmentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "รูปแบบวันที่ไม่ถูกต้อง (YYYY-MM-DD)"),
+  appointmentTime: z.string().regex(/^\d{2}:\d{2}$/, "รูปแบบเวลาไม่ถูกต้อง (HH:mm)"),
+  urgency: z.enum(["emergency", "urgent", "routine", "non_urgent"]).optional(),
+  recommendedDepartment: z.string().optional(),
+  note: z.string().optional(),
+});
+
+export async function staffCreateBooking(req: Request, res: Response) {
+  const parsed = staffBookingSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_input", details: parsed.error.flatten() });
+  }
+
+  const { patientId, symptoms, appointmentDate, appointmentTime, urgency, recommendedDepartment, note } = parsed.data;
+
+  // Verify patient exists
+  const patient = db.prepare(`SELECT id FROM patients WHERE id = ?`).get(patientId) as any;
+  if (!patient) {
+    return res.status(404).json({ error: "patient_not_found", message: "ไม่พบข้อมูลคนไข้" });
+  }
+
+  // Check slot is still available
+  const existing = db.prepare(
+    `SELECT id FROM bookings WHERE appointment_date = ? AND appointment_time = ? AND status != 'cancelled'`
+  ).get(appointmentDate, appointmentTime);
+  if (existing) {
+    return res.status(409).json({ error: "slot_taken", message: "เวลานี้ถูกจองแล้ว กรุณาเลือกเวลาอื่น" });
+  }
+
+  const bookingId = uuid();
+
+  db.prepare(
+    `INSERT INTO bookings (id, patient_id, symptoms, urgency, recommended_department, appointment_date, appointment_time, note, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmed')`
+  ).run(bookingId, patientId, symptoms, urgency || "routine", recommendedDepartment || null, appointmentDate, appointmentTime, note || null);
+
+  const booking = db.prepare(`SELECT * FROM bookings WHERE id = ?`).get(bookingId);
+
+  // Send confirmation email with PDF ticket (best-effort)
+  try {
+    const patientInfo = db.prepare(
+      `SELECT p.prefix_th, p.first_name_th, p.last_name_th, u.email, u.full_name
+       FROM patients p JOIN users u ON p.user_id = u.id WHERE p.id = ?`
+    ).get(patientId) as any;
+    if (patientInfo?.email) {
+      const patientName = patientInfo.full_name || `${patientInfo.prefix_th || ""}${patientInfo.first_name_th || ""} ${patientInfo.last_name_th || ""}`.trim();
+      const dept = recommendedDepartment || "ทั่วไป";
+      const queueNumber = bookingId.slice(0, 8).toUpperCase();
+
+      // Booking ticket PDF
+      const ticketPdf = await generateBookingTicketPdf({
+        patientName,
+        queueNumber,
+        department: dept,
+        appointmentDate,
+        appointmentTime,
+        urgency: urgency || "routine",
+        symptoms,
+      });
+      await sendBookingConfirmationEmail(patientInfo.email, {
+        patientName,
+        queueNumber,
+        department: dept,
+        appointmentDate,
+        appointmentTime,
+        urgency: urgency || "routine",
+      }, ticketPdf);
+
+      // Appointment notification PDF
+      const apptPdf = await generateAppointmentPdf({
+        patientName,
+        department: dept,
+        appointmentDate,
+        appointmentTime,
+        note: note || null,
+      });
+      await sendAppointmentEmail(patientInfo.email, {
+        patientName,
+        department: dept,
+        appointmentDate,
+        appointmentTime,
+        note: note || null,
+      }, apptPdf);
+    }
+  } catch (mailErr) {
+    console.error("[STAFF BOOKING] email notify failed:", mailErr);
+  }
+
+  return res.status(201).json({ ok: true, booking });
 }
 
 // ---------------------------------------------------------------------------
@@ -229,4 +389,42 @@ export function getBookingHistory(req: Request, res: Response) {
     .all(req.patientId);
 
   return res.json({ ok: true, bookings });
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/booking/appointments — upcoming (future) appointments
+// แสดงนัดหมายที่หมอ/เจ้าหน้าที่กำหนดไว้ (วันนัดยังไม่ผ่าน, ไม่ถูกยกเลิก)
+// ---------------------------------------------------------------------------
+export function getUpcomingAppointments(req: Request, res: Response) {
+  if (!req.patientId) return res.status(404).json({ error: "no_patient_record" });
+
+  const today = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+  const appointments = db
+    .prepare(
+      `SELECT * FROM bookings
+       WHERE patient_id = ? AND appointment_date >= ? AND status != 'cancelled'
+       ORDER BY appointment_date ASC, appointment_time ASC`
+    )
+    .all(req.patientId, today);
+
+  return res.json({ ok: true, appointments });
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/booking/appointments/:id/read — mark appointment as read
+// ---------------------------------------------------------------------------
+export function markAppointmentRead(req: Request, res: Response) {
+  if (!req.patientId) return res.status(404).json({ error: "no_patient_record" });
+
+  const { id } = req.params;
+  const booking = db
+    .prepare(`SELECT id FROM bookings WHERE id = ? AND patient_id = ?`)
+    .get(id, req.patientId) as any;
+  if (!booking) {
+    return res.status(404).json({ error: "not_found", message: "ไม่พบนัดหมายนี้" });
+  }
+
+  db.prepare(`UPDATE bookings SET is_read = 1 WHERE id = ?`).run(id);
+  return res.json({ ok: true });
 }

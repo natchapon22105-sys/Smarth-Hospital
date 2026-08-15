@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/db";
+import { bangkokToday } from "../utils/bangkok";
 
 function touchNurseActivity(userId: string) {
   db.prepare(`UPDATE users SET last_activity = datetime('now') WHERE id = ?`).run(userId);
@@ -17,7 +18,7 @@ function logActivity(nurseId: string, action: string, details?: string) {
 // Returns all bookings for a given date, ordered by time
 // ---------------------------------------------------------------------------
 export function getQueueByDate(req: Request, res: Response) {
-  const date = (req.query.date as string) || new Date().toISOString().split("T")[0];
+  const date = (req.query.date as string) || bangkokToday();
 
   const bookings = db
     .prepare(
@@ -35,7 +36,8 @@ export function getQueueByDate(req: Request, res: Response) {
         p.prefix_th,
         p.first_name_th,
         p.last_name_th,
-        p.national_id
+        p.national_id,
+        UPPER(SUBSTR(b.id, 1, 8)) as queue_number
       FROM bookings b
       JOIN patients p ON b.patient_id = p.id
       JOIN users u ON p.user_id = u.id

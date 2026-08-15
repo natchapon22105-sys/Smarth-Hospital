@@ -40,8 +40,8 @@ export default function NurseLoginPage() {
               <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
             </svg>
           </div>
-          <h1 className="font-display text-2xl font-semibold text-ink">ระบบพยาบาล</h1>
-          <p className="mt-1 text-sm text-ink/60">เข้าสู่ระบบสำหรับพยาบาล</p>
+          <h1 className="font-display text-2xl font-semibold text-ink">ระบบเวชระเบียน</h1>
+          <p className="mt-1 text-sm text-ink/60">เข้าสู่ระบบสำหรับเวชระเบียน</p>
         </div>
 
         <form onSubmit={handleSubmit} className="card p-6">

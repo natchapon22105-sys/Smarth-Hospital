@@ -15,6 +15,8 @@ type Patient = {
   full_name: string | null;
 };
 
+type Slot = { time: string; count: number; full: boolean; passed?: boolean };
+
 const CATEGORIES = [
   { value: "general", label: "ทั่วไป" },
   { value: "blood", label: "เลือด" },
@@ -30,6 +32,13 @@ const FLAGS = [
   { value: "critical", label: "วิกฤต" },
 ];
 
+const URGENCY_OPTIONS = [
+  { value: "routine", label: "ทั่วไป" },
+  { value: "urgent", label: "เร่งด่วน" },
+  { value: "emergency", label: "ฉุกเฉิน" },
+  { value: "non_urgent", label: "ไม่เร่งด่วน" },
+];
+
 function patientLabel(p: Patient): string {
   const name = p.full_name || `${p.prefix_th || ""}${p.first_name_th || ""} ${p.last_name_th || ""}`.trim();
   return name || p.email;
@@ -38,23 +47,34 @@ function patientLabel(p: Patient): string {
 export default function SendLabPage() {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
+  const [tab, setTab] = useState<"lab" | "booking">("lab");
 
-  // search
+  // shared search
   const [query, setQuery] = useState("");
   const [patients, setPatients] = useState<Patient[]>([]);
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<Patient | null>(null);
 
-  // form
+  // lab form
   const [testName, setTestName] = useState("");
   const [category, setCategory] = useState("general");
   const [resultValue, setResultValue] = useState("");
   const [unit, setUnit] = useState("");
   const [refRange, setRefRange] = useState("");
   const [flag, setFlag] = useState("normal");
-  const [note, setNote] = useState("");
+  const [labNote, setLabNote] = useState("");
   const [doctorName, setDoctorName] = useState("");
-  const [testDate, setTestDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [testDate, setTestDate] = useState(() => new Date(new Date().getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10));
+
+  // booking form
+  const [symptoms, setSymptoms] = useState("");
+  const [urgency, setUrgency] = useState("routine");
+  const [department, setDepartment] = useState("");
+  const [bookingNote, setBookingNote] = useState("");
+  const [appointmentDate, setAppointmentDate] = useState(() => new Date(new Date().getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10));
+  const [appointmentTime, setAppointmentTime] = useState("");
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,48 +115,77 @@ export default function SendLabPage() {
     return () => clearTimeout(t);
   }, [query]);
 
-  async function handleSubmit(e: React.FormEvent) {
+  // load slots when date changes
+  useEffect(() => {
+    if (!appointmentDate) return;
+    setAppointmentTime("");
+    setLoadingSlots(true);
+    api
+      .get<{ slots: Slot[] }>(`/api/admin/bookings/slots?date=${appointmentDate}`)
+      .then((res) => setSlots(res.slots))
+      .catch(() => setSlots([]))
+      .finally(() => setLoadingSlots(false));
+  }, [appointmentDate]);
+
+  function resetForm() {
+    setSelected(null);
+    setQuery("");
+    setPatients([]);
+    setTestName("");
+    setResultValue("");
+    setUnit("");
+    setRefRange("");
+    setLabNote("");
+    setFlag("normal");
+    setCategory("general");
+    setSymptoms("");
+    setUrgency("routine");
+    setDepartment("");
+    setBookingNote("");
+    setAppointmentTime("");
+  }
+
+  async function handleSubmitLab(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSuccess(null);
-
-    if (!selected) {
-      setError("กรุณาเลือกผู้ป่วย");
-      return;
-    }
-    if (!testName.trim()) {
-      setError("กรุณาระบุชื่อการตรวจ");
-      return;
-    }
-
+    if (!selected) { setError("กรุณาเลือกผู้ป่วย"); return; }
+    if (!testName.trim()) { setError("กรุณาระบุชื่อการตรวจ"); return; }
     setSubmitting(true);
     try {
       const res = await api.post<{ message: string }>("/api/lab/results", {
-        patientId: selected.id,
-        test_name: testName.trim(),
-        category,
-        result_value: resultValue.trim() || null,
-        unit: unit.trim() || null,
-        ref_range: refRange.trim() || null,
-        flag,
-        note: note.trim() || null,
-        doctor_name: doctorName.trim() || null,
-        test_date: testDate,
+        patientId: selected.id, test_name: testName.trim(), category,
+        result_value: resultValue.trim() || null, unit: unit.trim() || null,
+        ref_range: refRange.trim() || null, flag, note: labNote.trim() || null,
+        doctor_name: doctorName.trim() || null, test_date: testDate,
       });
       setSuccess(res.message || "บันทึกและส่งผลตรวจเรียบร้อยแล้ว");
-      // reset form
-      setTestName("");
-      setResultValue("");
-      setUnit("");
-      setRefRange("");
-      setNote("");
-      setFlag("normal");
-      setCategory("general");
+      setTestName(""); setResultValue(""); setUnit(""); setRefRange("");
+      setLabNote(""); setFlag("normal"); setCategory("general");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "ส่งผลตรวจไม่สำเร็จ");
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
+  }
+
+  async function handleSubmitBooking(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    if (!selected) { setError("กรุณาเลือกคนไข้"); return; }
+    if (!appointmentTime) { setError("กรุณาเลือกเวลา"); return; }
+    setSubmitting(true);
+    try {
+      await api.post("/api/admin/bookings/create", {
+        patientId: selected.id, symptoms, urgency,
+        recommendedDepartment: department || undefined,
+        note: bookingNote || undefined, appointmentDate, appointmentTime,
+      });
+      setSuccess("นัดหมายเรียบร้อย");
+      setSymptoms(""); setUrgency("routine"); setDepartment("");
+      setBookingNote(""); setAppointmentTime("");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "สร้างนัดหมายไม่สำเร็จ");
+    } finally { setSubmitting(false); }
   }
 
   if (checking) {
@@ -159,7 +208,7 @@ export default function SendLabPage() {
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <span className="font-display text-lg font-semibold text-white">ส่งผลตรวจให้คนไข้</span>
+        <span className="font-display text-lg font-semibold text-white">จัดการคนไข้</span>
       </header>
 
       <div className="mx-auto max-w-2xl space-y-6 px-5 py-6">
@@ -167,14 +216,34 @@ export default function SendLabPage() {
           <p className="rounded-lg bg-danger/15 px-3 py-2 text-sm text-red-300">{error}</p>
         )}
         {success && (
-          <div className="rounded-lg bg-teal/15 px-3 py-2 text-sm text-teal-light">
-            ✅ {success}
-          </div>
+          <div className="rounded-lg bg-teal/15 px-3 py-2 text-sm text-teal-light">{success}</div>
         )}
 
-        {/* Step 1: เลือกคนไข้ */}
+        {/* Tab selector */}
+        <div className="flex gap-2 rounded-xl2 border border-white/10 bg-navy-dark p-1">
+          <button
+            type="button"
+            onClick={() => setTab("lab")}
+            className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
+              tab === "lab" ? "bg-teal text-white" : "text-white/60 hover:text-white"
+            }`}
+          >
+            ส่งผลตรวจ
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("booking")}
+            className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
+              tab === "booking" ? "bg-teal text-white" : "text-white/60 hover:text-white"
+            }`}
+          >
+            นัดหมายคนไข้
+          </button>
+        </div>
+
+        {/* Patient search (shared) */}
         <section className="rounded-xl2 border border-white/10 bg-navy-dark p-5">
-          <h2 className="mb-3 font-display text-base font-semibold text-white">1. เลือกคนไข้</h2>
+          <h2 className="mb-3 font-display text-base font-semibold text-white">คนไข้</h2>
           <div className="relative">
             <input
               value={query}
@@ -221,10 +290,7 @@ export default function SendLabPage() {
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setSelected(null);
-                  setQuery("");
-                }}
+                onClick={() => { setSelected(null); setQuery(""); }}
                 className="text-xs text-white/50 underline hover:text-white"
               >
                 เปลี่ยน
@@ -233,120 +299,135 @@ export default function SendLabPage() {
           )}
         </section>
 
-        {/* Step 2: กรอกผลตรวจ */}
-        <form onSubmit={handleSubmit} className="space-y-4 rounded-xl2 border border-white/10 bg-navy-dark p-5">
-          <h2 className="font-display text-base font-semibold text-white">2. รายละเอียดผลตรวจ</h2>
+        {/* Tab: Lab results */}
+        {tab === "lab" && (
+          <form onSubmit={handleSubmitLab} className="space-y-4 rounded-xl2 border border-white/10 bg-navy-dark p-5">
+            <h2 className="font-display text-base font-semibold text-white">รายละเอียดผลตรวจ</h2>
 
-          <div>
-            <label className="mb-1 block text-sm text-white/70">ชื่อการตรวจ *</label>
-            <input
-              value={testName}
-              onChange={(e) => setTestName(e.target.value)}
-              placeholder="เช่น CBC, ไขมันในเลือด, เอกซเรย์ปอด"
-              className="w-full rounded-lg border border-white/10 bg-navy-deeper px-4 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal"
-            />
-          </div>
+            <div>
+              <label className="mb-1 block text-sm text-white/70">ชื่อการตรวจ *</label>
+              <input value={testName} onChange={(e) => setTestName(e.target.value)} placeholder="เช่น CBC, ไขมันในเลือด, เอกซเรย์ปอด" className="w-full rounded-lg border border-white/10 bg-navy-deeper px-4 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal" />
+            </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-sm text-white/70">หมวดหมู่</label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white outline-none focus:border-teal"
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm text-white/70">หมวดหมู่</label>
+                <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white outline-none focus:border-teal">
+                  {CATEGORIES.map((c) => (<option key={c.value} value={c.value}>{c.label}</option>))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-white/70">สถานะ</label>
+                <select value={flag} onChange={(e) => setFlag(e.target.value)} className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white outline-none focus:border-teal">
+                  {FLAGS.map((f) => (<option key={f.value} value={f.value}>{f.label}</option>))}
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="mb-1 block text-sm text-white/70">สถานะ</label>
-              <select
-                value={flag}
-                onChange={(e) => setFlag(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white outline-none focus:border-teal"
-              >
-                {FLAGS.map((f) => (
-                  <option key={f.value} value={f.value}>{f.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="mb-1 block text-sm text-white/70">ผลตรวจ</label>
-              <input
-                value={resultValue}
-                onChange={(e) => setResultValue(e.target.value)}
-                placeholder="ค่า"
-                className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal"
-              />
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="mb-1 block text-sm text-white/70">ผลตรวจ</label>
+                <input value={resultValue} onChange={(e) => setResultValue(e.target.value)} placeholder="ค่า" className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-white/70">หน่วย</label>
+                <input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="mg/dL" className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-white/70">เกณฑ์ปกติ</label>
+                <input value={refRange} onChange={(e) => setRefRange(e.target.value)} placeholder="70-100" className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal" />
+              </div>
             </div>
-            <div>
-              <label className="mb-1 block text-sm text-white/70">หน่วย</label>
-              <input
-                value={unit}
-                onChange={(e) => setUnit(e.target.value)}
-                placeholder="mg/dL"
-                className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm text-white/70">เกณฑ์ปกติ</label>
-              <input
-                value={refRange}
-                onChange={(e) => setRefRange(e.target.value)}
-                placeholder="70-100"
-                className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal"
-              />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-sm text-white/70">วันที่ตรวจ *</label>
-              <input
-                type="date"
-                value={testDate}
-                onChange={(e) => setTestDate(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white outline-none focus:border-teal"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm text-white/70">วันที่ตรวจ *</label>
+                <input type="date" value={testDate} onChange={(e) => setTestDate(e.target.value)} className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white outline-none focus:border-teal" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-white/70">ผู้ออกผล</label>
+                <input value={doctorName} onChange={(e) => setDoctorName(e.target.value)} placeholder="ชื่อแพทย์/เจ้าหน้าที่" className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal" />
+              </div>
             </div>
+
             <div>
-              <label className="mb-1 block text-sm text-white/70">ผู้ออกผล</label>
-              <input
-                value={doctorName}
-                onChange={(e) => setDoctorName(e.target.value)}
-                placeholder="ชื่อแพทย์/เจ้าหน้าที่"
-                className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal"
-              />
+              <label className="mb-1 block text-sm text-white/70">หมายเหตุ</label>
+              <textarea value={labNote} onChange={(e) => setLabNote(e.target.value)} rows={3} placeholder="คำแนะนำเพิ่มเติมสำหรับคนไข้" className="w-full rounded-lg border border-white/10 bg-navy-deeper px-4 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal" />
             </div>
-          </div>
 
-          <div>
-            <label className="mb-1 block text-sm text-white/70">หมายเหตุ</label>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={3}
-              placeholder="คำแนะนำเพิ่มเติมสำหรับคนไข้"
-              className="w-full rounded-lg border border-white/10 bg-navy-deeper px-4 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal"
-            />
-          </div>
+            <button type="submit" disabled={submitting || !selected} className="w-full rounded-lg bg-teal px-4 py-3 font-medium text-white transition hover:bg-teal-dark disabled:cursor-not-allowed disabled:opacity-50">
+              {submitting ? "กำลังส่ง..." : "บันทึกและส่งผลตรวจ"}
+            </button>
+            <p className="text-center text-xs text-white/40">ระบบจะส่งอีเมลแจ้งเตือนไปยังคนไข้โดยอัตโนมัติ</p>
+          </form>
+        )}
 
-          <button
-            type="submit"
-            disabled={submitting || !selected}
-            className="w-full rounded-lg bg-teal px-4 py-3 font-medium text-white transition hover:bg-teal-dark disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {submitting ? "กำลังส่ง..." : "บันทึกและส่งผลตรวจ"}
-          </button>
-          <p className="text-center text-xs text-white/40">
-            ระบบจะส่งอีเมลแจ้งเตือนไปยังคนไข้โดยอัตโนมัติ
-          </p>
-        </form>
+        {/* Tab: Booking */}
+        {tab === "booking" && (
+          <form onSubmit={handleSubmitBooking} className="space-y-4">
+            <div className="rounded-xl2 border border-white/10 bg-navy-dark p-5">
+              <h2 className="mb-3 font-display text-base font-semibold text-white">ข้อมูลการนัดหมาย</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-sm text-white/70">อาการ *</label>
+                  <textarea value={symptoms} onChange={(e) => setSymptoms(e.target.value)} placeholder="ระบุอาการของคนไข้" className="w-full rounded-lg border border-white/10 bg-navy-deeper px-4 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal min-h-[72px]" required />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-sm text-white/70">ความเร่งด่วน</label>
+                    <select value={urgency} onChange={(e) => setUrgency(e.target.value)} className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white outline-none focus:border-teal">
+                      {URGENCY_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm text-white/70">แผนก (ถ้าระบุได้)</label>
+                    <input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="เช่น อายุรกรรม" className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal" />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-white/70">หมายเหตุ (ถ้ามี)</label>
+                  <input value={bookingNote} onChange={(e) => setBookingNote(e.target.value)} placeholder="หมายเหตุเพิ่มเติม" className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal" />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl2 border border-white/10 bg-navy-dark p-5">
+              <h2 className="mb-3 font-display text-base font-semibold text-white">วันที่และเวลา</h2>
+              <div className="mb-4">
+                <input type="date" value={appointmentDate} onChange={(e) => setAppointmentDate(e.target.value)} min={new Date(new Date().getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10)} className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white outline-none focus:border-teal" />
+              </div>
+              {loadingSlots ? (
+                <p className="text-xs text-white/40">กำลังโหลดเวลา...</p>
+              ) : (
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                  {slots.map((slot) => (
+                    <button
+                      key={slot.time}
+                      type="button"
+                      disabled={slot.full}
+                      onClick={() => setAppointmentTime(slot.time)}
+                      className={`rounded-lg border px-2.5 py-2 text-xs font-medium transition ${
+                        appointmentTime === slot.time
+                          ? "border-teal bg-teal/20 text-teal-light"
+                          : slot.full
+                          ? "border-white/5 bg-white/[0.02] text-white/20 cursor-not-allowed"
+                          : "border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:bg-white/10"
+                      }`}
+                    >
+                      {slot.time}
+                      {slot.full && <span className="block text-[10px] text-red-400">หมดเวลา</span>}
+                      {!slot.full && <span className="block text-[10px] text-white/30">({slot.count})</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button type="submit" disabled={submitting || !selected || !appointmentTime} className="w-full rounded-lg bg-teal px-4 py-3 font-medium text-white transition hover:bg-teal-dark disabled:cursor-not-allowed disabled:opacity-50">
+              {submitting ? "กำลังสร้างนัดหมาย..." : "ยืนยันนัดหมาย"}
+            </button>
+          </form>
+        )}
       </div>
     </main>
   );

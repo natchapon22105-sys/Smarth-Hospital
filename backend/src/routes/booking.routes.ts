@@ -7,6 +7,8 @@ import {
   confirmBooking,
   getAvailableSlots,
   getBookingHistory,
+  getUpcomingAppointments,
+  markAppointmentRead,
 } from "../controllers/booking.controller";
 
 const upload = multer({
@@ -23,5 +25,7 @@ router.post("/analyze-followup", analyzeFollowUp);
 router.post("/confirm", confirmBooking);
 router.get("/available-slots", getAvailableSlots);
 router.get("/history", getBookingHistory);
+router.get("/appointments", getUpcomingAppointments);
+router.post("/appointments/:id/read", markAppointmentRead);
 
 export default router;

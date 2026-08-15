@@ -212,21 +212,7 @@ export default function LabResultsPage() {
               </div>
             )}
 
-            {/* คำเตือน */}
-            <div className="rounded-xl border-2 border-danger bg-red-50 p-4 text-sm">
-              <div className="flex items-start gap-2.5">
-                <span className="mt-0.5 text-lg">⚠️</span>
-                <div>
-                  <p className="font-bold text-danger">คำเตือน</p>
-                  <p className="mt-1 leading-relaxed text-red-700">
-                    ผลการวิเคราะห์นี้เป็นเพียงการวิเคราะห์เบื้องต้นเท่านั้น <strong className="text-danger">ไม่ใช่การวินิจฉัยทางการแพทย์</strong>
-                    <br />
-                    กรุณาปรึกษาแพทย์ผู้เชี่ยวชาญเพื่อการวินิจฉัยที่ถูกต้อง
-                  </p>
-                </div>
-              </div>
             </div>
-          </div>
         )}
       </Modal>
 

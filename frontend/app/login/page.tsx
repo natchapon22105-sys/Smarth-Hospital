@@ -13,6 +13,7 @@ function LoginPageInner() {
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -59,7 +60,7 @@ function LoginPageInner() {
             <Image src="/logo.png" alt="NudMedi" width={96} height={96} className="h-full w-full object-cover" priority />
           </div>
           <h1 className="gradient-text font-display text-3xl font-bold tracking-widest">NUDMEDI</h1>
-          <p className="mt-1 text-sm text-ink/60">เข้าสู่ระบบเพื่อจัดการนัดหมายและประวัติสุขภาพ</p>
+          <p className="mt-1 text-sm text-ink/60">เข้าสู่ระบบเพื่อเริ่มการนัดหมายและประวัติสุขภาพ</p>
         </div>
 
         <form onSubmit={handleSubmit} className="card p-6 animate-[card-float_4s_ease-in-out_infinite]">
@@ -80,15 +81,33 @@ function LoginPageInner() {
             <label className="field-label" htmlFor="password">
               รหัสผ่าน
             </label>
-            <input
-              id="password"
-              type="password"
-              className="field-input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                className="field-input pr-10"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                onMouseDown={() => setShowPassword(true)}
+                onMouseUp={() => setShowPassword(false)}
+                onMouseLeave={() => setShowPassword(false)}
+                onTouchStart={() => setShowPassword(true)}
+                onTouchEnd={() => setShowPassword(false)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink/40 hover:text-ink/70"
+                tabIndex={-1}
+                aria-label="แสดงรหัสผ่าน"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            </div>
             <div className="mt-1.5 text-right">
               <Link href="/forgot-password" className="text-xs text-teal hover:underline">
                 ลืมรหัสผ่าน?
