@@ -85,7 +85,7 @@ function PatientProfilePageInner() {
   const [saved, setSaved] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [guideStep, setGuideStep] = useState(-1);
+  const [guideStep, setGuideStep] = useState(isFirstTime ? 0 : -1);
   const [showGuide, setShowGuide] = useState(isFirstTime);
 
   // ถ้ามีการถ่ายบัตรแล้ว ข้ามขั้นตอน OCR ไป
@@ -117,6 +117,8 @@ function PatientProfilePageInner() {
     emergencyPhone: "",
     pdpaConsent: false,
   });
+  const [prefixThIsOther, setPrefixThIsOther] = useState(false);
+  const [prefixEnIsOther, setPrefixEnIsOther] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -125,6 +127,10 @@ function PatientProfilePageInner() {
           "/api/patient/profile"
         );
         const p = res.patient;
+        const stdPrefixTh = PREFIX_OPTIONS.map(o => o.value);
+        const stdPrefixEn = PREFIX_EN_OPTIONS.map(o => o.value);
+        setPrefixThIsOther(!!p.prefix_th && !stdPrefixTh.includes(p.prefix_th));
+        setPrefixEnIsOther(!!p.prefix_en && !stdPrefixEn.includes(p.prefix_en));
         setForm((prev) => ({
           ...prev,
           nationalId: p.national_id || "",
@@ -208,18 +214,35 @@ function PatientProfilePageInner() {
         emergencyPhone: form.emergencyPhone.replace(/[^0-9]/g, ""),
       });
       setSaved(true);
-      // หลังบันทึกโปรไฟล์ครั้งแรกเสร็จ ให้ไปหน้าแอป (เฉพาะครั้งแรกที่มาจาก register)
-      if (isFirstTime) {
-        setTimeout(() => {
-          router.push("/app-home");
-          router.refresh();
-        }, 800);
-      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "บันทึกไม่สำเร็จ");
     } finally {
       setSaving(false);
     }
+  }
+
+  // ---- Show success page after save ----
+  if (saved) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-bg px-6">
+        <div className="card mx-auto max-w-sm p-8 text-center">
+          {/* Success icon */}
+          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-teal-light">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#0E7C7B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          </div>
+          <h1 className="mb-2 font-display text-xl font-semibold text-ink">บันทึกข้อมูลสำเร็จ</h1>
+          <p className="mb-6 text-sm text-ink/60">ข้อมูลส่วนตัวและประวัติสุขภาพของคุณถูกบันทึกเรียบร้อยแล้ว</p>
+          <button
+            onClick={() => { router.push("/app-home"); router.refresh(); }}
+            className="btn-primary w-full py-3 text-base"
+          >
+            กลับไปหน้าแรก
+          </button>
+        </div>
+      </main>
+    );
   }
 
   if (loadingProfile) {
@@ -348,12 +371,20 @@ function PatientProfilePageInner() {
               {/* Field: prefix TH */}
               <div className={`rounded-lg border-2 transition-all duration-300 p-3 ${showGuide && guideStep === 2 ? 'border-teal bg-teal/[0.03] shadow-[0_0_0_3px_rgba(14,124,123,0.12)]' : showGuide && guideStep !== 2 ? 'opacity-30 pointer-events-none' : ''}`}>
                 <label className="field-label">คำนำหน้า (TH)</label>
-                <select className="field-input" value={form.prefixTh} onChange={(e) => update("prefixTh", e.target.value)}>
+                <select className="field-input" value={prefixThIsOther ? "other" : form.prefixTh} onChange={(e) => {
+                  if (e.target.value === "other") {
+                    setPrefixThIsOther(true);
+                    update("prefixTh", "");
+                  } else {
+                    setPrefixThIsOther(false);
+                    update("prefixTh", e.target.value);
+                  }
+                }}>
                   <option value="">เลือก</option>
                   {PREFIX_OPTIONS.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
                 </select>
-                {form.prefixTh === "other" && (
-                  <input className="field-input mt-2" placeholder="ระบุคํานําหน้า" value={form.prefixTh === "other" ? "" : form.prefixTh} onChange={(e) => update("prefixTh", e.target.value)} />
+                {prefixThIsOther && (
+                  <input className="field-input mt-2" placeholder="ระบุคํานําหน้า" value={form.prefixTh} onChange={(e) => update("prefixTh", e.target.value)} autoFocus />
                 )}
                 {showGuide && guideStep === 2 && (
                   <div className="mt-3 rounded-lg bg-teal px-3.5 py-2.5">
@@ -402,11 +433,19 @@ function PatientProfilePageInner() {
               {/* Field: prefix EN */}
               <div className={`rounded-lg border-2 transition-all duration-300 p-3 ${showGuide && guideStep === 5 ? 'border-teal bg-teal/[0.03] shadow-[0_0_0_3px_rgba(14,124,123,0.12)]' : showGuide && guideStep !== 5 ? 'opacity-30 pointer-events-none' : ''}`}>
                 <label className="field-label">คำนำหน้า (EN)</label>
-                <select className="field-input" value={form.prefixEn} onChange={(e) => update("prefixEn", e.target.value)}>
+                <select className="field-input" value={prefixEnIsOther ? "other" : form.prefixEn} onChange={(e) => {
+                  if (e.target.value === "other") {
+                    setPrefixEnIsOther(true);
+                    update("prefixEn", "");
+                  } else {
+                    setPrefixEnIsOther(false);
+                    update("prefixEn", e.target.value);
+                  }
+                }}>
                   <option value="">เลือก</option>
                   {PREFIX_EN_OPTIONS.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
                 </select>
-                {form.prefixEn === "other" && (<input className="field-input mt-2" placeholder="ระบุคำนำหน้า" onChange={(e) => update("prefixEn", e.target.value)} />)}
+                {prefixEnIsOther && (<input className="field-input mt-2" placeholder="ระบุคำนำหน้า" value={form.prefixEn} onChange={(e) => update("prefixEn", e.target.value)} autoFocus />)}
                 {showGuide && guideStep === 5 && (
                   <div className="mt-3 rounded-lg bg-teal px-3.5 py-2.5">
                     <p className="text-xs text-white leading-relaxed">

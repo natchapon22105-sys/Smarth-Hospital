@@ -9,7 +9,7 @@ import { generateLabResultPdf } from "../utils/pdf";
 // the client.
 
 // ---------------------------------------------------------------------------
-// GET /api/lab/results
+// GET /api/lab/results?month=YYYY-MM
 // Returns: { results: LabResult[] } — lab results for the current patient,
 // ordered by test_date DESC then created_at DESC.
 // ---------------------------------------------------------------------------
@@ -17,13 +17,23 @@ export function getLabResults(req: Request, res: Response) {
   const patientId = req.patientId;
   if (!patientId) return res.status(404).json({ error: "no_patient_record" });
 
+  const today = new Date();
+  today.setHours(today.getHours() + 7); // Bangkok
+  const defaultMonth = today.toISOString().slice(0, 7);
+  const month = (req.query.month as string) || defaultMonth;
+
+  const monthStart = `${month}-01`;
+  const d = new Date(monthStart + "T00:00:00");
+  d.setMonth(d.getMonth() + 1);
+  const monthEnd = d.toISOString().slice(0, 10);
+
   const results = db
     .prepare(
-      `SELECT * FROM lab_results WHERE patient_id = ? ORDER BY test_date DESC, created_at DESC`
+      `SELECT * FROM lab_results WHERE patient_id = ? AND test_date >= ? AND test_date < ? ORDER BY test_date DESC, created_at DESC`
     )
-    .all(patientId);
+    .all(patientId, monthStart, monthEnd);
 
-  return res.json({ ok: true, results });
+  return res.json({ ok: true, results, month });
 }
 
 // ---------------------------------------------------------------------------

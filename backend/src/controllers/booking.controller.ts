@@ -18,6 +18,19 @@ function checkPdpa(req: Request, res: Response): boolean {
   return true;
 }
 
+/** Generate queue number: AM/PM-HH:MM-XXX (XXX = running number in that slot) */
+function generateQueueNumber(date: string, time: string): string {
+  const hour = parseInt(time.split(":")[0], 10);
+  const period = hour < 12 ? "AM" : "PM";
+
+  // Count existing bookings at this exact time on this date (including the one just inserted)
+  const count = (db.prepare(
+    `SELECT COUNT(*) as c FROM bookings WHERE appointment_date = ? AND appointment_time = ? AND status != 'cancelled'`
+  ).get(date, time) as any).c;
+
+  return `${period}-${time}-${String(count).padStart(3, "0")}`;
+}
+
 /** Fetches patient's existing medical history for AI context */
 function getPatientMedicalSummary(patientId: string): string {
   const p = db.prepare(
@@ -145,12 +158,19 @@ export async function confirmBooking(req: Request, res: Response) {
 
   const bookingId = uuid();
 
-  // Check slot is still available
-  const existing = db.prepare(
-    `SELECT id FROM bookings WHERE appointment_date = ? AND appointment_time = ? AND status != 'cancelled'`
-  ).get(appointmentDate, appointmentTime);
-  if (existing) {
-    return res.status(409).json({ error: "slot_taken", message: "เวลานี้ถูกจองแล้ว กรุณาเลือกเวลาอื่น" });
+  // Check slot capacity: max_queue_per_hour (default 16) per hour,
+  // counting all bookings in the same hour (e.g. 10:00 & 10:30 count together)
+  const maxRow = db.prepare(`SELECT value FROM system_settings WHERE key = 'max_queue_per_hour'`).get() as
+    | { value: string }
+    | undefined;
+  const maxQueuePerHour = maxRow ? Number(maxRow.value) || 16 : 16;
+
+  const hour = appointmentTime.split(":")[0];
+  const hourCount = db.prepare(
+    `SELECT COUNT(*) as c FROM bookings WHERE appointment_date = ? AND substr(appointment_time, 1, 2) = ? AND status != 'cancelled'`
+  ).get(appointmentDate, hour) as any;
+  if (hourCount.c >= maxQueuePerHour) {
+    return res.status(409).json({ error: "slot_full", message: "ช่วงเวลานี้เต็มแล้ว กรุณาเลือกเวลาอื่น" });
   }
 
   const tx = db.transaction(() => {
@@ -185,9 +205,9 @@ export async function confirmBooking(req: Request, res: Response) {
     if (patient?.email) {
       const patientName = patient.full_name || `${patient.prefix_th || ""}${patient.first_name_th || ""} ${patient.last_name_th || ""}`.trim();
       const dept = analysis.recommended_department;
-      const queueNumber = bookingId.slice(0, 8).toUpperCase();
+      const queueNumber = generateQueueNumber(appointmentDate, appointmentTime);
 
-      // Booking ticket PDF
+      // Send only booking ticket PDF + confirmation email (for queue booking)
       const ticketPdf = await generateBookingTicketPdf({
         patientName,
         queueNumber,
@@ -205,22 +225,6 @@ export async function confirmBooking(req: Request, res: Response) {
         appointmentTime,
         urgency: analysis.urgency,
       }, ticketPdf);
-
-      // Appointment notification PDF
-      const apptPdf = await generateAppointmentPdf({
-        patientName,
-        department: dept,
-        appointmentDate,
-        appointmentTime,
-        note: null,
-      });
-      await sendAppointmentEmail(patient.email, {
-        patientName,
-        department: dept,
-        appointmentDate,
-        appointmentTime,
-        note: null,
-      }, apptPdf);
     }
   } catch (mailErr) {
     console.error("[BOOKING] email notify failed:", mailErr);
@@ -292,6 +296,7 @@ const staffBookingSchema = z.object({
   urgency: z.enum(["emergency", "urgent", "routine", "non_urgent"]).optional(),
   recommendedDepartment: z.string().optional(),
   note: z.string().optional(),
+  doctorName: z.string().optional(),
 });
 
 export async function staffCreateBooking(req: Request, res: Response) {
@@ -300,7 +305,7 @@ export async function staffCreateBooking(req: Request, res: Response) {
     return res.status(400).json({ error: "invalid_input", details: parsed.error.flatten() });
   }
 
-  const { patientId, symptoms, appointmentDate, appointmentTime, urgency, recommendedDepartment, note } = parsed.data;
+  const { patientId, symptoms, appointmentDate, appointmentTime, urgency, recommendedDepartment, note, doctorName } = parsed.data;
 
   // Verify patient exists
   const patient = db.prepare(`SELECT id FROM patients WHERE id = ?`).get(patientId) as any;
@@ -308,20 +313,26 @@ export async function staffCreateBooking(req: Request, res: Response) {
     return res.status(404).json({ error: "patient_not_found", message: "ไม่พบข้อมูลคนไข้" });
   }
 
-  // Check slot is still available
-  const existing = db.prepare(
-    `SELECT id FROM bookings WHERE appointment_date = ? AND appointment_time = ? AND status != 'cancelled'`
-  ).get(appointmentDate, appointmentTime);
-  if (existing) {
-    return res.status(409).json({ error: "slot_taken", message: "เวลานี้ถูกจองแล้ว กรุณาเลือกเวลาอื่น" });
+  // Check slot capacity: max_queue_per_hour (default 16) per hour
+  const maxRow = db.prepare(`SELECT value FROM system_settings WHERE key = 'max_queue_per_hour'`).get() as
+    | { value: string }
+    | undefined;
+  const maxQueuePerHour = maxRow ? Number(maxRow.value) || 16 : 16;
+
+  const hour = appointmentTime.split(":")[0];
+  const hourCount = db.prepare(
+    `SELECT COUNT(*) as c FROM bookings WHERE appointment_date = ? AND substr(appointment_time, 1, 2) = ? AND status != 'cancelled'`
+  ).get(appointmentDate, hour) as any;
+  if (hourCount.c >= maxQueuePerHour) {
+    return res.status(409).json({ error: "slot_full", message: "ช่วงเวลานี้เต็มแล้ว กรุณาเลือกเวลาอื่น" });
   }
 
   const bookingId = uuid();
 
   db.prepare(
-    `INSERT INTO bookings (id, patient_id, symptoms, urgency, recommended_department, appointment_date, appointment_time, note, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmed')`
-  ).run(bookingId, patientId, symptoms, urgency || "routine", recommendedDepartment || null, appointmentDate, appointmentTime, note || null);
+    `INSERT INTO bookings (id, patient_id, symptoms, urgency, recommended_department, appointment_date, appointment_time, note, doctor_name, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed')`
+  ).run(bookingId, patientId, symptoms, urgency || "routine", recommendedDepartment || null, appointmentDate, appointmentTime, note || null, doctorName || null);
 
   const booking = db.prepare(`SELECT * FROM bookings WHERE id = ?`).get(bookingId);
 
@@ -334,34 +345,17 @@ export async function staffCreateBooking(req: Request, res: Response) {
     if (patientInfo?.email) {
       const patientName = patientInfo.full_name || `${patientInfo.prefix_th || ""}${patientInfo.first_name_th || ""} ${patientInfo.last_name_th || ""}`.trim();
       const dept = recommendedDepartment || "ทั่วไป";
-      const queueNumber = bookingId.slice(0, 8).toUpperCase();
 
-      // Booking ticket PDF
-      const ticketPdf = await generateBookingTicketPdf({
-        patientName,
-        queueNumber,
-        department: dept,
-        appointmentDate,
-        appointmentTime,
-        urgency: urgency || "routine",
-        symptoms,
-      });
-      await sendBookingConfirmationEmail(patientInfo.email, {
-        patientName,
-        queueNumber,
-        department: dept,
-        appointmentDate,
-        appointmentTime,
-        urgency: urgency || "routine",
-      }, ticketPdf);
-
-      // Appointment notification PDF
+      // Appointment notification PDF (staff creates appointments, not queue bookings)
       const apptPdf = await generateAppointmentPdf({
         patientName,
         department: dept,
         appointmentDate,
         appointmentTime,
         note: note || null,
+        urgency: urgency || "routine",
+        symptoms,
+        doctorName: doctorName || undefined,
       });
       await sendAppointmentEmail(patientInfo.email, {
         patientName,
@@ -369,6 +363,7 @@ export async function staffCreateBooking(req: Request, res: Response) {
         appointmentDate,
         appointmentTime,
         note: note || null,
+        doctorName: doctorName || undefined,
       }, apptPdf);
     }
   } catch (mailErr) {

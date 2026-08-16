@@ -164,15 +164,33 @@ export default function BookingPage() {
     listeningSetter(false);
   }
 
-  // ---- Image upload ----
+  // ---- Image upload + compress ----
   function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Compress image on client side before upload — speeds up AI drastically
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
-      setImageBase64(dataUrl);
-      setImagePreview(dataUrl);
+      // Compress to max 800px width, JPEG quality 0.6
+      const img = new window.Image();
+      img.onload = () => {
+        const maxW = 800;
+        const maxH = 800;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxW) { h = Math.round(h * (maxW / w)); w = maxW; }
+        if (h > maxH) { w = Math.round(w * (maxH / h)); h = maxH; }
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, w, h);
+        const compressed = canvas.toDataURL("image/jpeg", 0.6);
+        setImageBase64(compressed);
+        setImagePreview(dataUrl); // show original for preview
+      };
+      img.src = dataUrl;
     };
     reader.readAsDataURL(file);
   }
@@ -471,7 +489,7 @@ export default function BookingPage() {
         {/* ---- STEP 2: Answer Questions ---- */}
         {step === "questions" && questions.length > 0 && (
           <div className="card p-6">
-            <h1 className="mb-1 font-display text-lg font-semibold text-ink">ซักประวัติโดย AI</h1>
+            <h1 className="mb-1 font-display text-lg font-semibold text-ink">ซักประวัติเบื้องต้นโดย AI</h1>
             <p className="mb-4 text-sm text-ink/55">ตอบคำถามทั้งหมดให้ครบ แล้ว AI จะวิเคราะห์อาการให้</p>
 
             {/* Progress */}

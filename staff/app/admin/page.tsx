@@ -35,7 +35,7 @@ const SYSTEMS = [
   },
   {
     id: "send-lab",
-    title: "จัดการคนไข้",
+    title: "ระบบ การ ส่งผล และ นัดหมาย คนไข้",
     desc: "ค้นหาคนไข้ ส่งผลตรวจ และนัดหมาย",
     icon: <path d="M9 3h6v4a3 3 0 003 3v8a3 3 0 01-3 3H9a3 3 0 01-3-3v-8a3 3 0 003-3V3z" />,
     href: "/admin/send-lab",

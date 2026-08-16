@@ -49,28 +49,49 @@ function drawBackground(doc: PDFKit.PDFDocument) {
   doc.restore();
 }
 
-// ─── Header: centered logo + title bar ───────────────────────────────────────
+// ─── Header: elegant header with logo, title, and metadata ────────────────
 
 function drawHeader(doc: PDFKit.PDFDocument, subtitle: string) {
-  // Solid white bar behind header
+  // Top accent bar (teal)
   doc.save();
-  doc.rect(0, 0, PAGE_W, 100).fillColor("#FFFFFF").fill();
+  doc.rect(0, 0, PAGE_W, 6).fillColor("#0E7C7B").fill();
   doc.restore();
 
-  // Centered logo
+  // White header background
+  doc.save();
+  doc.rect(0, 6, PAGE_W, 110).fillColor("#FFFFFF").fill();
+  doc.restore();
+
+  // Subtle teal accent stripe on left
+  doc.save();
+  doc.rect(0, 6, 4, 110).fillColor("#0E7C7B", 0.15).fill();
+  doc.restore();
+
+  // Logo
   try {
-    doc.image(LOGO_PATH, PAGE_W / 2 - 18, 10, { width: 34 });
+    doc.image(LOGO_PATH, 32, 14, { width: 48 });
   } catch {
     // ignore
   }
 
   // Title
-  doc.font("Sarabun-Bold").fontSize(18).fillColor("#0E7C7B").text("NudMedi", MARGIN, 48, { align: "center" });
-  doc.font("Sarabun").fontSize(12).fillColor("#0E7C7B").text(subtitle, MARGIN, 70, { align: "center" });
+  doc.font("Sarabun-Bold").fontSize(24).fillColor("#0E7C7B").text("NudMedi", 92, 18);
+
+  // Subtitle
+  doc.font("Sarabun").fontSize(14).fillColor("#0E7C7B", 0.8).text(subtitle, 92, 48);
+
+  // Right side: hospital info
+  const infoX = PAGE_W - MARGIN - 180;
+  doc.font("Sarabun").fontSize(11).fillColor("#555");
+  const today = new Date();
+  const dateStr = today.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Bangkok" });
+  doc.text(`วันที่ออก: ${dateStr}`, infoX, 16, { width: 180, align: "right" });
+  doc.font("Sarabun-Bold").fontSize(11).fillColor("#0E7C7B", 0.7).text("NudMedi Hospital System", infoX, 38, { width: 180, align: "right" });
+  doc.font("Sarabun").fontSize(11).fillColor("#555").text("โรงพยาบาล NudMedi", infoX, 56, { width: 180, align: "right" });
 
   // Decorative line under header
   doc.save();
-  doc.moveTo(80, 98).lineTo(PAGE_W - 80, 98).lineWidth(1.5).strokeColor("#0E7C7B", 0.5).stroke();
+  doc.moveTo(MARGIN, 114).lineTo(PAGE_W - MARGIN, 114).lineWidth(1.5).strokeColor("#0E7C7B", 0.3).stroke();
   doc.restore();
 }
 
@@ -99,11 +120,21 @@ function startCard(doc: PDFKit.PDFDocument, top: number): number {
 // ─── Section title ───────────────────────────────────────────────────────────
 
 function sectionTitle(doc: PDFKit.PDFDocument, text: string, y: number): number {
-  doc.font("Sarabun-Bold").fontSize(12).fillColor("#0E7C7B").text(text, MARGIN + 20, y);
+  doc.font("Sarabun-Bold").fontSize(14).fillColor("#0E7C7B").text(text, MARGIN + 20, y);
   doc.save();
-  doc.moveTo(MARGIN + 20, y + 18).lineTo(MARGIN + 20 + 140, y + 18).lineWidth(1.5).strokeColor("#0E7C7B", 0.6).stroke();
+  doc.moveTo(MARGIN + 20, y + 22).lineTo(MARGIN + 20 + 180, y + 22).lineWidth(2).strokeColor("#0E7C7B", 0.6).stroke();
   doc.restore();
-  return y + 26;
+  return y + 34;
+}
+
+// ─── Section separator ──────────────────────────────────────────────────────
+
+function sectionSeparator(doc: PDFKit.PDFDocument, y: number): number {
+  y += 4;
+  doc.save();
+  doc.moveTo(MARGIN + 20, y).lineTo(PAGE_W - MARGIN - 20, y).lineWidth(0.5).strokeColor("#DCE7E5", 0.6).stroke();
+  doc.restore();
+  return y + 12;
 }
 
 // ─── Labeled row ─────────────────────────────────────────────────────────────
@@ -116,9 +147,9 @@ function drawRow(
   y: number,
   valueColor?: string
 ): number {
-  doc.font("Sarabun-Bold").fontSize(10).fillColor("#1E293B").text(label, x, y, { continued: true });
-  doc.font("Sarabun").fillColor(valueColor || "#0F172A").text(value, x + 110, y);
-  return y + 18;
+  doc.font("Sarabun-Bold").fontSize(12).fillColor("#334155").text(label, x, y, { continued: true });
+  doc.font("Sarabun").fillColor(valueColor || "#0F172A").text(value, x + 130, y);
+  return y + 24;
 }
 
 // ─── Info box (colored background for emphasis) ──────────────────────────────
@@ -133,26 +164,28 @@ function infoBox(
   textColor: string
 ): number {
   const w = CONTENT_W - 40;
-  const h = 28;
+  const h = 34;
   doc.save();
   doc.rect(x, y, w, h).fillColor(bgColor).fill();
   doc.restore();
-  doc.font("Sarabun-Bold").fontSize(10).fillColor(textColor).text(label, x + 10, y + 6, { continued: true });
-  doc.font("Sarabun-Bold").fillColor(textColor).text(value, x + 10 + 80, y + 6);
-  return y + h + 6;
+  doc.font("Sarabun-Bold").fontSize(12).fillColor(textColor).text(label, x + 12, y + 8, { continued: true });
+  doc.font("Sarabun-Bold").fillColor(textColor).text(value, x + 12 + 90, y + 8);
+  return y + h + 10;
 }
 
 // ─── Note box ────────────────────────────────────────────────────────────────
 
 function noteBox(doc: PDFKit.PDFDocument, title: string, text: string, x: number, y: number): number {
   const w = CONTENT_W - 40;
+  // Estimate height needed
+  const textH = doc.heightOfString(text, { width: w - 24 });
+  const boxH = Math.max(34, 28 + textH + 8);
   doc.save();
-  doc.rect(x, y, w, 26).fillColor("#F0F9F6").fill();
+  doc.rect(x, y, w, boxH).fillColor("#F0F9F6").fill();
   doc.restore();
-  doc.font("Sarabun-Bold").fontSize(10).fillColor("#0E7C7B").text(title, x + 10, y + 6);
-  doc.font("Sarabun").fontSize(9).fillColor("#334155").text(text, x + 10, y + 22, { width: w - 20 });
-  const textH = doc.heightOfString(text, { width: w - 20 });
-  return y + 26 + textH + 8;
+  doc.font("Sarabun-Bold").fontSize(11).fillColor("#0E7C7B").text(title, x + 12, y + 8);
+  doc.font("Sarabun").fontSize(11).fillColor("#334155").text(text, x + 12, y + 28, { width: w - 24 });
+  return y + boxH + 10;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -177,12 +210,14 @@ export function generateLabResultPdf(data: {
     drawBackground(doc);
     drawHeader(doc, "ผลการตรวจ");
 
-    let y = startCard(doc, 115);
+    let y = startCard(doc, 130);
     const x = MARGIN + 20;
     y = sectionTitle(doc, "ข้อมูลผู้ป่วย", y);
     y = drawRow(doc, "ชื่อผู้ป่วย:", data.patientName, x, y);
     if (data.nationalId) y = drawRow(doc, "เลขบัตร:", data.nationalId, x, y);
-    y += 8;
+
+    // Separator
+    y = sectionSeparator(doc, y);
 
     // Test details section
     y = sectionTitle(doc, "รายละเอียดผลตรวจ", y);
@@ -210,7 +245,7 @@ export function generateLabResultPdf(data: {
     // Note
     if (data.note) {
       y += 4;
-      y = noteBox(doc, "📋 หมายเหตุ", data.note, x, y);
+      y = noteBox(doc, "หมายเหตุ", data.note, x, y);
     }
 
     drawFooter(doc, "ออกโดยอัตโนมัติจากระบบ NudMedi");
@@ -230,24 +265,18 @@ export function generateBookingTicketPdf(data: {
   urgency: string;
   symptoms?: string | null;
   note?: string | null;
+  doctorName?: string | null;
 }): Promise<Buffer> {
   return renderPdf((doc) => {
     drawBackground(doc);
-    drawHeader(doc, "บัตรคิว / ใบนัดหมาย");
+    drawHeader(doc, "บัตรคิว");
 
-    let y = startCard(doc, 115);
+    let y = startCard(doc, 130);
     const x = MARGIN + 20;
 
-    // Queue number — big centered badge
-    doc.save();
-    const badgeW = 180;
-    const badgeH = 52;
-    const badgeX = PAGE_W / 2 - badgeW / 2;
-    doc.rect(badgeX, y, badgeW, badgeH).fillColor("#0E7C7B").fill();
-    doc.restore();
-    doc.font("Sarabun-Bold").fontSize(26).fillColor("#FFFFFF").text(data.queueNumber, badgeX, y + 8, { align: "center" });
-    doc.font("Sarabun").fontSize(10).fillColor("#FFFFFF", 0.85).text("หมายเลขคิว", badgeX, y + 38, { align: "center" });
-    y += badgeH + 14;
+    // Queue number — large centered text (no box)
+    doc.font("Sarabun-Bold").fontSize(42).fillColor("#0E7C7B").text(data.queueNumber, 0, y, { align: "center" });
+    y += 50;
 
     // Details
     y = sectionTitle(doc, "รายละเอียดการนัดหมาย", y);
@@ -263,21 +292,32 @@ export function generateBookingTicketPdf(data: {
 
     y = drawRow(doc, "ชื่อผู้ป่วย:", data.patientName, x, y);
     y = drawRow(doc, "แผนก:", data.department, x, y);
+
+    if (data.doctorName) {
+      y = drawRow(doc, "แพทย์:", data.doctorName, x, y);
+    }
+
     y = drawRow(doc, "วันที่นัด:", data.appointmentDate, x, y);
     y = drawRow(doc, "เวลา:", `${data.appointmentTime} น.`, x, y);
     y = drawRow(doc, "ความเร่งด่วน:", urgencyLabel, x, y);
 
+    // Separator
+    y = sectionSeparator(doc, y);
+
     if (data.symptoms) {
       y += 4;
-      doc.font("Sarabun-Bold").fontSize(11).fillColor("#1E293B").text("อาการ:", x, y);
+      doc.font("Sarabun-Bold").fontSize(12).fillColor("#1E293B").text("อาการ:", x, y);
       y += 20;
-      doc.font("Sarabun").fontSize(10).fillColor("#0F172A").text(data.symptoms, x + 20, y, { width: CONTENT_W - 80 });
+      doc.font("Sarabun").fontSize(11).fillColor("#0F172A").text(data.symptoms, x + 20, y, { width: CONTENT_W - 80 });
       y = doc.y + 12;
     }
 
+    // Separator
+    y = sectionSeparator(doc, y);
+
     if (data.note) {
       y += 4;
-      y = noteBox(doc, "📋 หมายเหตุ", data.note, x, y);
+      y = noteBox(doc, "หมายเหตุ", data.note, x, y);
     }
 
     drawFooter(doc, "กรุณานำบัตรคิวนี้ไปแสดงที่โรงพยาบาลในวันนัดหมาย");
@@ -288,38 +328,78 @@ export function generateBookingTicketPdf(data: {
 //  3. Appointment Notification PDF
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/** Generate an appointment notification PDF */
 export function generateAppointmentPdf(data: {
   patientName: string;
   department: string;
   appointmentDate: string;
   appointmentTime: string;
   note?: string | null;
+  doctorName?: string | null;
+  appointmentDetails?: string | null;
+  symptoms?: string | null;
+  urgency?: string | null;
 }): Promise<Buffer> {
   return renderPdf((doc) => {
     drawBackground(doc);
     drawHeader(doc, "แจ้งนัดหมาย");
 
-    let y = startCard(doc, 115);
+    let y = startCard(doc, 130);
     const x = MARGIN + 20;
 
-    // Appointment icon / decorative element
+    // Header notification
     doc.save();
     doc.rect(x, y, CONTENT_W - 40, 36).fillColor("#0E7C7B", 0.08).fill();
     doc.restore();
-    doc.font("Sarabun-Bold").fontSize(12).fillColor("#0E7C7B").text("📅 คุณมีนัดหมายกับทางโรงพยาบาล", x + 10, y + 9);
+    doc.font("Sarabun-Bold").fontSize(12).fillColor("#0E7C7B").text("ข้อมูลการนัดหมาย", x + 10, y + 9);
     y += 48;
 
     y = sectionTitle(doc, "รายละเอียดนัดหมาย", y);
     y = drawRow(doc, "ชื่อผู้ป่วย:", data.patientName, x, y);
+
+    if (data.doctorName) {
+      y = drawRow(doc, "แพทย์ผู้นัด:", data.doctorName, x, y);
+    }
+
     y = drawRow(doc, "แผนก:", data.department, x, y);
     y = drawRow(doc, "วันที่นัด:", data.appointmentDate, x, y);
     y = drawRow(doc, "เวลา:", `${data.appointmentTime} น.`, x, y);
 
-    if (data.note) {
-      y += 4;
-      y = noteBox(doc, "📋 หมายเหตุ", data.note, x, y);
+    if (data.urgency) {
+      const urgencyLabel =
+        data.urgency === "emergency" ? "ฉุกเฉิน" :
+        data.urgency === "urgent" ? "เร่งด่วน" :
+        data.urgency === "routine" ? "ทั่วไป" : "ไม่เร่งด่วน";
+      y = drawRow(doc, "ความเร่งด่วน:", urgencyLabel, x, y);
     }
 
-    drawFooter(doc, "ออกโดยอัตโนมัติจากระบบ NudMedi");
+    // Separator
+    y = sectionSeparator(doc, y);
+
+    if (data.appointmentDetails) {
+      y += 4;
+      y = noteBox(doc, "รายละเอียดที่หมอนัด", data.appointmentDetails, x, y);
+    }
+
+    // Separator
+    y = sectionSeparator(doc, y);
+
+    if (data.symptoms) {
+      y += 4;
+      doc.font("Sarabun-Bold").fontSize(12).fillColor("#1E293B").text("อาการ:", x, y);
+      y += 20;
+      doc.font("Sarabun").fontSize(11).fillColor("#0F172A").text(data.symptoms, x + 20, y, { width: CONTENT_W - 80 });
+      y = doc.y + 12;
+    }
+
+    // Separator
+    y = sectionSeparator(doc, y);
+
+    if (data.note) {
+      y += 4;
+      y = noteBox(doc,"หมายเหตุ", data.note, x, y);
+    }
+
+    drawFooter(doc, "กรุณามาตามวันและเวลาที่นัดหมาย");
   });
 }

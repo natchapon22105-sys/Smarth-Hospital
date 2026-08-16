@@ -215,6 +215,20 @@ CREATE TABLE IF NOT EXISTS family_members (
 )
 `);
 
+// AI usage tracking — records every OpenAI/OpenRouter call with token counts
+db.exec(`
+CREATE TABLE IF NOT EXISTS ai_usage (
+  id            TEXT PRIMARY KEY,
+  user_id       TEXT,                            -- patient user id (if known)
+  step          TEXT NOT NULL,                   -- 'questions' | 'analysis'
+  model         TEXT,
+  prompt_tokens INTEGER NOT NULL DEFAULT 0,
+  completion_tokens INTEGER NOT NULL DEFAULT 0,
+  total_tokens  INTEGER NOT NULL DEFAULT 0,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+)
+`);
+
 // Migration helper: add a column only if it does not already exist.
 // Running a bare ALTER TABLE ... ADD COLUMN on every boot crashes the server
 // with "duplicate column name" once the column already exists.
@@ -266,6 +280,7 @@ addColumnIfMissing("patients", "profile_image", "TEXT");
 
 // Migration: add is_read column if missing (for existing databases)
 addColumnIfMissing("lab_results", "is_read", "INTEGER NOT NULL DEFAULT 0");
+addColumnIfMissing("bookings", "doctor_name", "TEXT");
 
 // Seed default settings
 const insertSetting = db.prepare(`INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)`);

@@ -25,47 +25,50 @@ export default function DepartmentPieChart({
 }: {
   data: { name: string; value: number }[];
 }) {
-  if (!data || data.length === 0) {
-    return (
-      <div className="flex h-64 items-center justify-center text-white/40">
-        ไม่มีข้อมูลการจอง
-      </div>
-    );
-  }
+  const hasData = data && data.length > 0;
+  const chartData = hasData ? data : [{ name: "", value: 1 }];
 
   return (
     <ResponsiveContainer width="100%" height={280}>
       <PieChart>
         <Pie
-          data={data}
+          data={chartData}
           dataKey="value"
           nameKey="name"
           cx="50%"
           cy="50%"
           outerRadius={95}
           innerRadius={50}
-          paddingAngle={2}
-          label={({ name, percent }) =>
+          paddingAngle={hasData ? 2 : 0}
+          label={hasData ? ({ name, percent }) =>
             `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
-          }
-          labelLine={false}
+          : false}
+          labelLine={hasData}
         >
-          {data.map((_, i) => (
-            <Cell key={i} fill={COLORS[i % COLORS.length]} />
-          ))}
+          {hasData ? (
+            data.map((_, i) => (
+              <Cell key={i} fill={COLORS[i % COLORS.length]} />
+            ))
+          ) : (
+            <Cell fill="#374151" />
+          )}
         </Pie>
-        <Tooltip
-          contentStyle={{
-            background: "#071427",
-            border: "1px solid rgba(255,255,255,0.1)",
-            borderRadius: 12,
-            color: "#fff",
-          }}
-          formatter={(value, name) => [`${value} ครั้ง`, name as string]}
-        />
-        <Legend
-          wrapperStyle={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}
-        />
+        {hasData && (
+          <>
+            <Tooltip
+              contentStyle={{
+                background: "#071427",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 12,
+                color: "#fff",
+              }}
+              formatter={(value, name) => [`${value} ครั้ง`, name as string]}
+            />
+            <Legend
+              wrapperStyle={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}
+            />
+          </>
+        )}
       </PieChart>
     </ResponsiveContainer>
   );

@@ -55,7 +55,7 @@ export default function AppHomePage() {
       <header className="relative flex items-center justify-between px-5 py-4">
         <HamburgerMenu />
         <div className="flex items-center gap-3">
-          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-teal/30 shadow-lg animate-[logo-float-3d_6s_ease-in-out_infinite]">
+          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-teal/30 shadow-lg">
             <Image src="/logo.png" alt="NudMedi" width={64} height={64} className="h-full w-full object-cover" />
           </div>
           <span className="gradient-text font-display text-2xl font-bold tracking-wider">NUDMEDI</span>

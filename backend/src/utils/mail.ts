@@ -122,7 +122,7 @@ export async function sendLabResultEmail(
         ${data.doctorName ? `<p style="color:#999;font-size:12px;">ผู้ออกผล: ${data.doctorName}</p>` : ""}
       </div>
       ${noteLine}
-      ${pdfBuffer ? '<p style="margin-top:12px;color:#0d9488;">📎 ไฟล์ PDF แนบมาพร้อมอีเมลนี้</p>' : ""}
+      ${pdfBuffer ? '<p style="margin-top:12px;color:#0d9488;">ไฟล์ PDF แนบมาพร้อมอีเมลนี้</p>' : ""}
       <p style="margin-top:16px;color:#666;">กรุณาเข้าสู่ระบบ NudMedi เพื่อดูรายละเอียดเพิ่มเติม</p>
       <hr style="border:none;border-top:1px solid #eee;" />
       <p style="font-size:12px;color:#999;">อีเมลนี้ส่งโดยอัตโนมัติจากระบบ NudMedi</p>
@@ -163,7 +163,7 @@ export async function sendBookingConfirmationEmail(
         <p style="margin:4px 0;"><strong>เวลา:</strong> ${data.appointmentTime} น.</p>
         <p style="margin:4px 0;"><strong>ระดับ:</strong> ${urgencyLabel}</p>
       </div>
-      ${pdfBuffer ? '<p style="margin-top:12px;color:#0d9488;">📎 บัตรคิว PDF แนบมาพร้อมอีเมลนี้</p>' : ""}
+      ${pdfBuffer ? '<p style="margin-top:12px;color:#0d9488;">บัตรคิว PDF แนบมาพร้อมอีเมลนี้</p>' : ""}
       <p style="margin-top:16px;color:#666;">กรุณาแสดงบัตรคิวที่โรงพยาบาลในวันนัดหมาย</p>
       <hr style="border:none;border-top:1px solid #eee;" />
       <p style="font-size:12px;color:#999;">อีเมลนี้ส่งโดยอัตโนมัติจากระบบ NudMedi</p>
@@ -183,26 +183,34 @@ export async function sendAppointmentEmail(
     appointmentDate: string;
     appointmentTime: string;
     note?: string | null;
+    doctorName?: string | null;
+    appointmentDetails?: string | null;
   },
   pdfBuffer?: Buffer
 ): Promise<void> {
   const subject = `แจ้งนัดหมาย NudMedi — ${data.department}`;
+  const doctorLine = data.doctorName ? `<p style="margin:4px 0;"><strong>แพทย์ผู้นัด:</strong> ${data.doctorName}</p>` : "";
+  const detailsLine = data.appointmentDetails
+    ? `<div style="margin-top:12px;padding:12px;background:#f4f7f6;border-radius:8px;"><p style="margin:0;color:#333;"><strong>รายละเอียดที่หมอนัด:</strong></p><p style="margin:6px 0 0;color:#555;">${data.appointmentDetails}</p></div>`
+    : "";
   const html = `
     <div style="font-family:sans-serif;max-width:480px;margin:0 auto;">
       <h2 style="color:#0d9488;">NudMedi</h2>
       <p>เรียน ${data.patientName}</p>
-      <p>คุณมีนัดหมายกับทางโรงพยาบาล</p>
+      <p>ข้อมูลการนัดหมาย</p>
       <div style="margin-top:12px;padding:16px;background:#f4f7f6;border-radius:10px;">
         <p style="margin:4px 0;"><strong>แผนก:</strong> ${data.department}</p>
+        ${doctorLine}
         <p style="margin:4px 0;"><strong>วันที่นัด:</strong> ${data.appointmentDate}</p>
         <p style="margin:4px 0;"><strong>เวลา:</strong> ${data.appointmentTime} น.</p>
       </div>
+      ${detailsLine}
       ${data.note ? `<div style="margin-top:12px;padding:12px;background:#f4f7f6;border-radius:8px;"><p style="margin:0;color:#333;"><strong>หมายเหตุ:</strong> ${data.note}</p></div>` : ""}
-      ${pdfBuffer ? '<p style="margin-top:12px;color:#0d9488;">📎 เอกสารนัดหมาย PDF แนบมาพร้อมอีเมลนี้</p>' : ""}
+      ${pdfBuffer ? '<p style="margin-top:12px;color:#0d9488;">เอกสารนัดหมาย PDF แนบมาพร้อมอีเมลนี้</p>' : ""}
       <p style="margin-top:16px;color:#666;">กรุณามาตามวันและเวลาที่นัดหมาย</p>
       <hr style="border:none;border-top:1px solid #eee;" />
       <p style="font-size:12px;color:#999;">อีเมลนี้ส่งโดยอัตโนมัติจากระบบ NudMedi</p>
     </div>`;
-  const text = `เรียน ${data.patientName}\n\nคุณมีนัดหมายกับทางโรงพยาบาล\nแผนก: ${data.department}\nวันที่: ${data.appointmentDate}\nเวลา: ${data.appointmentTime} น.\n\nกรุณามาตามวันและเวลาที่นัดหมาย`;
+  const text = `เรียน ${data.patientName}\n\nข้อมูลการนัดหมาย\nแผนก: ${data.department}${data.doctorName ? `\nแพทย์ผู้นัด: ${data.doctorName}` : ""}\nวันที่: ${data.appointmentDate}\nเวลา: ${data.appointmentTime} น.\n\nกรุณามาตามวันและเวลาที่นัดหมาย`;
   await sendWithAttachment(to, subject, html, text, pdfBuffer ? { filename: `appointment_${data.department.replace(/[^a-zA-Z0-9ก-๙]/g, "_")}.pdf`, content: pdfBuffer } : undefined);
 }

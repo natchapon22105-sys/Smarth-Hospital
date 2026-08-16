@@ -1,9 +1,31 @@
 import OpenAI from "openai";
+import { v4 as uuid } from "uuid";
 import { db } from "../db/db";
 
 const MODEL = process.env.OPENROUTER_MODEL || "gpt-4o-mini";
 
 let _openai: OpenAI | null = null;
+
+/** บันทึก token usage ลง ai_usage table (best-effort) */
+function logAiUsage(step: string, usage: OpenAI.Completions.CompletionUsage | undefined, userId?: string) {
+  try {
+    if (!usage) return;
+    db.prepare(
+      `INSERT INTO ai_usage (id, user_id, step, model, prompt_tokens, completion_tokens, total_tokens)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      uuid(),
+      userId || null,
+      step,
+      MODEL,
+      usage.prompt_tokens || 0,
+      usage.completion_tokens || 0,
+      usage.total_tokens || 0
+    );
+  } catch (err) {
+    console.error("[AI] logAiUsage failed:", err);
+  }
+}
 
 function getClient(): OpenAI {
   if (_openai) return _openai;
@@ -18,6 +40,7 @@ function getClient(): OpenAI {
       "HTTP-Referer": "https://nudmedi.app",
       "X-Title": "NudMedi",
     },
+    timeout: 30_000, // 30s timeout — don't hang forever
   });
   return _openai;
 }
@@ -40,14 +63,14 @@ function getDepartmentsList(): string {
 function buildSystemPrompt(): string {
   const deptList = getDepartmentsList();
   const deptSection = deptList
-    ? `\n\n## แผนกของโรงพยาบาล\nโรงพยาบาลมีแผนกดังต่อไปนี้ กรุณาเลือกแผนกที่เหมาะสมที่สุดจากรายการนี้เท่านั้น:\n${deptList}`
+    ? `\n\n## แผนกของโรงพยาบาล\nโรงพยาบาลมีแผนกดังต่อไปนี้เท่านั้น (ห้ามแนะนำแผนกนอกเหนือจากรายการนี้เด็ดขาด):\n${deptList}\n\nกฎสำคัญ: ฟิลด์ recommended_department ต้องเป็นชื่อแผนกจากรายการข้างต้นเท่านั้น ถ้าไม่มีแผนกใดตรงกับอาการ ให้เลือกแผนกที่ใกล้เคียงที่สุดจากรายการ ห้ามสร้างหรือคิดค้นชื่อแผนกเองเด็ดขาด`
     : "";
 
   return `คุณคือแพทย์ผู้เชี่ยวชาญของโรงพยาบาล พูดภาษาไทย เป็นกันเอง ใช้ภาษาเข้าใจง่าย
 
 ## ขั้นตอนที่ 1 — ซักประวัติ (ตั้งคำถาม 5 ข้อ)
 เมื่อได้รับอาการ รูปภาพ (ถ้ามี) และข้อมูลสุขภาพที่มีอยู่แล้วของผู้ป่วย ให้ตั้งคำถาม 5 ข้อ ที่จำเป็นเพื่อให้ได้ข้อมูลเพียงพอสำหรับการวินิจฉัยเบื้องต้น
-⚠️ ห้ามถามซ้ำเกี่ยวกับข้อมูลสุขภาพที่ระบบแจ้งให้ทราบแล้ว 
+ห้ามถามซ้ำเกี่ยวกับข้อมูลสุขภาพที่ระบบแจ้งให้ทราบแล้ว 
 ตอบในรูปแบบ JSON เท่านั้น (ห้ามมีข้อความอื่นนอก JSON):
 {
   "questions": [
@@ -70,7 +93,7 @@ ${deptSection}
 {
   "summary": "สรุปอาการโดยละเอียด วิเคราะห์สาเหตุที่เป็นไปได้ พร้อมเหตุผลทางการแพทย์",
   "differential_diagnosis": ["การวินิจฉัยแยกโรคที่เป็นไปได้ 2-3 ข้อ"],
-  "recommended_department": "แผนกที่ควรไปรับการรักษา (เลือกจากรายการแผนกของโรงพยาบาลเท่านั้น)",
+  "recommended_department": "ต้องเลือกจากรายการแผนกของโรงพยาบาลที่ให้ไว้ข้างต้นเท่านั้น ห้ามใช้ชื่อแผนกอื่น",
   "urgency": "emergency | urgent | routine | non_urgent",
   "urgency_label": "ฉุกเฉิน | เร่งด่วน | ทั่วไป | ไม่เร่งด่วน",
   "reason": "เหตุผลทางการแพทย์ที่แนะนำแผนกนี้ พร้อมข้อควรสังเกต",
@@ -111,9 +134,11 @@ export async function askFollowUpQuestions(
   const res = await getClient().chat.completions.create({
     model: MODEL,
     messages,
-    max_tokens: 800,
+    max_tokens: 400,
     response_format: { type: "json_object" },
   });
+
+  logAiUsage("questions", res.usage);
 
   const text = res.choices[0]?.message?.content || '{"questions":[]}';
 
@@ -176,14 +201,39 @@ export async function getFinalAnalysis(
   const res = await getClient().chat.completions.create({
     model: MODEL,
     messages,
-    max_tokens: 1200,
+    max_tokens: 800,
     response_format: { type: "json_object" },
   });
+
+  logAiUsage("analysis", res.usage);
 
   const text = res.choices[0]?.message?.content || "{}";
 
   try {
-    return JSON.parse(text);
+    const result = JSON.parse(text);
+
+    // Validate recommended_department against actual active departments
+    if (result.recommended_department) {
+      const activeDepts = db
+        .prepare(`SELECT name FROM departments WHERE is_active = 1`)
+        .all() as { name: string }[];
+      const validNames = activeDepts.map((d) => d.name.trim().toLowerCase());
+      const aiDept = result.recommended_department.trim().toLowerCase();
+
+      if (!validNames.includes(aiDept)) {
+        // Try to find a close match (contains)
+        const closeMatch = activeDepts.find((d) =>
+          d.name.toLowerCase().includes(aiDept) || aiDept.includes(d.name.toLowerCase())
+        );
+        if (closeMatch) {
+          result.recommended_department = closeMatch.name;
+        } else {
+          result.recommended_department = activeDepts[0]?.name || "อายุรกรรม";
+        }
+      }
+    }
+
+    return result as any;
   } catch {
     return {
       summary: "ไม่สามารถวิเคราะห์ได้ กรุณาพบแพทย์เพื่อรับการวินิจฉัย",

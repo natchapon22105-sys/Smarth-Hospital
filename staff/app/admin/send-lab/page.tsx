@@ -70,6 +70,7 @@ export default function SendLabPage() {
   const [symptoms, setSymptoms] = useState("");
   const [urgency, setUrgency] = useState("routine");
   const [department, setDepartment] = useState("");
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
   const [bookingNote, setBookingNote] = useState("");
   const [appointmentDate, setAppointmentDate] = useState(() => new Date(new Date().getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10));
   const [appointmentTime, setAppointmentTime] = useState("");
@@ -79,6 +80,7 @@ export default function SendLabPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [done, setDone] = useState<"lab" | "booking" | null>(null); // success screen
 
   useEffect(() => {
     api
@@ -127,6 +129,13 @@ export default function SendLabPage() {
       .finally(() => setLoadingSlots(false));
   }, [appointmentDate]);
 
+  // load active departments
+  useEffect(() => {
+    api.get<{ departments: { id: string; name: string }[] }>("/api/admin/departments/active")
+      .then((res) => setDepartments(res.departments || []))
+      .catch(() => {});
+  }, []);
+
   function resetForm() {
     setSelected(null);
     setQuery("");
@@ -160,8 +169,7 @@ export default function SendLabPage() {
         doctor_name: doctorName.trim() || null, test_date: testDate,
       });
       setSuccess(res.message || "บันทึกและส่งผลตรวจเรียบร้อยแล้ว");
-      setTestName(""); setResultValue(""); setUnit(""); setRefRange("");
-      setLabNote(""); setFlag("normal"); setCategory("general");
+      setDone("lab");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "ส่งผลตรวจไม่สำเร็จ");
     } finally { setSubmitting(false); }
@@ -171,7 +179,7 @@ export default function SendLabPage() {
     e.preventDefault();
     setError(null);
     setSuccess(null);
-    if (!selected) { setError("กรุณาเลือกคนไข้"); return; }
+    if (!selected) { setError("กรุณาเลือกคนไข้อ"); return; }
     if (!appointmentTime) { setError("กรุณาเลือกเวลา"); return; }
     setSubmitting(true);
     try {
@@ -179,10 +187,12 @@ export default function SendLabPage() {
         patientId: selected.id, symptoms, urgency,
         recommendedDepartment: department || undefined,
         note: bookingNote || undefined, appointmentDate, appointmentTime,
+        doctorName: doctorName.trim() || undefined,
       });
       setSuccess("นัดหมายเรียบร้อย");
+      setDone("booking");
       setSymptoms(""); setUrgency("routine"); setDepartment("");
-      setBookingNote(""); setAppointmentTime("");
+      setBookingNote(""); setAppointmentTime(""); setDoctorName("");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "สร้างนัดหมายไม่สำเร็จ");
     } finally { setSubmitting(false); }
@@ -208,7 +218,7 @@ export default function SendLabPage() {
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <span className="font-display text-lg font-semibold text-white">จัดการคนไข้</span>
+        <span className="font-display text-lg font-semibold text-white">ระบบการ ส่งผล และ นัดหมาย คนไข้</span>
       </header>
 
       <div className="mx-auto max-w-2xl space-y-6 px-5 py-6">
@@ -242,6 +252,26 @@ export default function SendLabPage() {
         </div>
 
         {/* Patient search (shared) */}
+        {done && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-teal/20">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#0E7C7B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+            </div>
+            <h2 className="mb-2 font-display text-xl font-semibold text-white">เสร็จสิ้น</h2>
+            <p className="mb-6 text-sm text-white/60">{done === "lab" ? "ส่งผลตรวจเรียบร้อยแล้ว" : "นัดหมายเรียบร้อยแล้ว"}</p>
+            <button
+              onClick={() => { setDone(null); setSuccess(null); setError(null); setSelected(null); setQuery(""); setPatients([]);
+                setTestName(""); setResultValue(""); setUnit(""); setRefRange(""); setLabNote(""); setFlag("normal"); setCategory("general");
+                setSymptoms(""); setUrgency("routine"); setDepartment(""); setBookingNote(""); setAppointmentTime(""); setDoctorName(""); }}
+              className="rounded-xl bg-teal px-6 py-3 font-medium text-white transition hover:bg-teal-dark"
+            >
+              กลับไปหน้าการจัดการ
+            </button>
+          </div>
+        )}
+        {!done && (<>
         <section className="rounded-xl2 border border-white/10 bg-navy-dark p-5">
           <h2 className="mb-3 font-display text-base font-semibold text-white">คนไข้</h2>
           <div className="relative">
@@ -380,9 +410,16 @@ export default function SendLabPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm text-white/70">แผนก (ถ้าระบุได้)</label>
-                    <input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="เช่น อายุรกรรม" className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal" />
+                    <label className="mb-1 block text-sm text-white/70">แผนก</label>
+                    <select value={department} onChange={(e) => setDepartment(e.target.value)} className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white outline-none focus:border-teal">
+                      <option value="">-- ไม่ระบุ --</option>
+                      {departments.map((d) => (<option key={d.id} value={d.name}>{d.name}</option>))}
+                    </select>
                   </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-white/70">ชื่อแพทย์ผู้นัด</label>
+                  <input value={doctorName} onChange={(e) => setDoctorName(e.target.value)} placeholder="เช่น นพ. สมศักดิ์ รักษาดี" className="w-full rounded-lg border border-white/10 bg-navy-deeper px-3 py-2.5 text-white placeholder-white/40 outline-none focus:border-teal" />
                 </div>
                 <div>
                   <label className="mb-1 block text-sm text-white/70">หมายเหตุ (ถ้ามี)</label>
@@ -428,6 +465,7 @@ export default function SendLabPage() {
             </button>
           </form>
         )}
+        </>)}
       </div>
     </main>
   );

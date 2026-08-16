@@ -101,8 +101,8 @@ export default function RegisterPage() {
 
       <div className="relative z-10 w-full max-w-sm" style={{ perspective: "800px" }}>
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-2 border-teal/20 shadow-lg animate-[logo-float-3d_6s_ease-in-out_infinite]">
-            <Image src="/logo.png" alt="NudMedi" width={96} height={96} className="h-full w-full object-cover" priority />
+          <div className="mx-auto mb-4 flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-2 border-teal/20 shadow-lg">
+            <Image src="/logo.png" alt="NudMedi" width={112} height={112} className="h-full w-full object-cover" priority />
           </div>
           <h1 className="gradient-text font-display text-3xl font-bold tracking-widest">NUDMEDI</h1>
           <h2 className="font-display text-xl font-semibold text-ink mt-4">สมัครสมาชิก</h2>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
 
 const LINKS = [
@@ -34,13 +35,39 @@ export default function HamburgerMenu() {
   const router = useRouter();
 
   // Lock body and prevent any interaction with content behind
+  // Must be aggressive to handle iOS Safari + Android Chrome
   useEffect(() => {
     if (open) {
+      const scrollY = window.scrollY;
       document.body.style.overflow = "hidden";
+      document.body.style.touchAction = "none";
+      document.body.style.position = "fixed";
+      document.body.style.width = "100%";
+      document.body.style.top = `-${scrollY}px`;
+      document.documentElement.style.overflow = "hidden";
+      document.documentElement.style.touchAction = "none";
+      // Store scrollY for restoration on close
+      (window as any).__hamburgerScrollY = scrollY;
     } else {
       document.body.style.overflow = "";
+      document.body.style.touchAction = "";
+      document.body.style.position = "";
+      document.body.style.width = "";
+      document.body.style.top = "";
+      document.documentElement.style.overflow = "";
+      document.documentElement.style.touchAction = "";
+      const prevScroll = (window as any).__hamburgerScrollY || 0;
+      window.scrollTo(0, prevScroll);
     }
-    return () => { document.body.style.overflow = ""; };
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.touchAction = "";
+      document.body.style.position = "";
+      document.body.style.width = "";
+      document.body.style.top = "";
+      document.documentElement.style.overflow = "";
+      document.documentElement.style.touchAction = "";
+    };
   }, [open]);
 
   // Fetch account info when menu opens
@@ -117,7 +144,7 @@ export default function HamburgerMenu() {
         aria-label="เปิดเมนู"
         aria-expanded={open}
         onClick={handleOpen}
-        className="relative z-30 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface"
+        className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface"
       >
         <span className="sr-only">เมนู</span>
         <div className="space-y-1.5">
@@ -127,24 +154,24 @@ export default function HamburgerMenu() {
         </div>
       </button>
 
-      {open && (
+      {open && typeof document !== "undefined" && createPortal(
         <>
-          {/* Backdrop */}
+          {/* Backdrop — ทับทุกอย่าง */}
           <button
             aria-label="ปิดเมนู"
-            className={`fixed inset-0 z-40 transition-opacity duration-300 ${
+            className={`fixed inset-0 z-[9999] transition-opacity duration-300 ${
               animating ? "opacity-100" : "opacity-0"
             }`}
-            style={{ backgroundColor: "rgba(0,0,0,0.35)" }}
+            style={{ backgroundColor: "rgba(0,0,0,0.75)" }}
             onClick={handleClose}
           />
 
           {/* Sidebar */}
           <nav
-            className={`fixed left-0 top-0 z-50 h-full w-72 max-w-[85vw] p-5 shadow-xl transition-transform duration-300 ease-out ${
+            className={`fixed left-0 top-0 z-[99999] h-full w-80 max-w-[90vw] p-6 shadow-2xl transition-transform duration-300 ease-out ${
               animating ? "translate-x-0" : "-translate-x-full"
             }`}
-            style={{ backgroundColor: "#E4F2F1" }} /* mint green */
+            style={{ backgroundColor: "#E4F2F1" }}
           >
             <div className="mb-6 flex items-center justify-between">
               <span className="font-display text-lg font-semibold text-teal-dark">เมนู</span>
@@ -222,7 +249,8 @@ export default function HamburgerMenu() {
               </button>
             </div>
           </nav>
-        </>
+        </>,
+        document.body
       )}
     </>
   );

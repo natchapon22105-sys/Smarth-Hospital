@@ -58,10 +58,14 @@ export default function LabResultsPage() {
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<LabResult[]>([]);
   const [selected, setSelected] = useState<LabResult | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const now = new Date();
+  const [month, setMonth] = useState(() => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
 
   useEffect(() => {
     loadResults();
-  }, []);
+  }, [month]);
 
   // เปิดดูผลตรวจ + ทำเครื่องหมาย "อ่านแล้ว" (ให้ไฮไลท์ที่หน้าแรกหายไป)
   function openResult(r: LabResult) {
@@ -86,7 +90,7 @@ export default function LabResultsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get<{ results: LabResult[] }>("/api/lab/results");
+      const res = await api.get<{ results: LabResult[] }>(`/api/lab/results?month=${month}`);
       setResults(res.results);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "โหลดผลตรวจไม่สำเร็จ");
@@ -94,6 +98,39 @@ export default function LabResultsPage() {
       setLoading(false);
     }
   }
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    setError(null);
+    try {
+      const res = await api.get<{ results: LabResult[] }>(`/api/lab/results?month=${month}`);
+      setResults(res.results);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "โหลดผลตรวจไม่สำเร็จ");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  function prevMonth() {
+    const d = new Date(month + "-01T00:00:00");
+    d.setMonth(d.getMonth() - 1);
+    setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+
+  function nextMonth() {
+    const d = new Date(month + "-01T00:00:00");
+    d.setMonth(d.getMonth() + 1);
+    const today = new Date();
+    if (d > today) return;
+    setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+
+  const thaiMonths = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+  const monthLabel = (() => {
+    const [y, m] = month.split("-").map(Number);
+    return `${thaiMonths[m - 1] || ""} ${y + 543}`;
+  })();
 
   return (
     <main className="relative min-h-screen pb-24">
@@ -112,7 +149,40 @@ export default function LabResultsPage() {
           </svg>
         </Link>
         <span className="font-display text-base font-semibold">ผลตรวจ</span>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface text-ink/60 transition hover:bg-teal-light hover:text-teal-dark"
+            aria-label="รีเฟรช"
+          >
+            <svg
+              className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+            </svg>
+          </button>
+        </div>
       </header>
+
+      {/* Month navigation */}
+      <div className="relative z-10 mx-auto max-w-lg px-5 pb-2">
+        <div className="flex items-center justify-between rounded-xl border border-line bg-surface/80 px-4 py-2">
+          <button onClick={prevMonth} className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-ink/60 transition hover:bg-teal-light" aria-label="เดือนก่อนหน้า">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <span className="font-display text-sm font-semibold text-ink">{monthLabel}</span>
+          <button onClick={nextMonth} className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-ink/60 transition hover:bg-teal-light" aria-label="เดือนถัดไป">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+      </div>
 
       <div className="relative z-10 mx-auto max-w-lg space-y-4 px-5">
         {error && (

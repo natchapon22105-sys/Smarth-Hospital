@@ -55,11 +55,20 @@ export async function loginAdmin(req: Request, res: Response) {
 // ---------------------------------------------------------------------------
 export function getDashboard(req: Request, res: Response) {
   const today = bangkokToday();
+  const month = (req.query.month as string) || today.slice(0, 7); // YYYY-MM
+
+  // Start and end of the selected month
+  const monthStart = `${month}-01`;
+  const monthEnd = (() => {
+    const d = new Date(monthStart + "T00:00:00");
+    d.setMonth(d.getMonth() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
 
   const totalPatients = (db.prepare(`SELECT COUNT(*) as c FROM patients`).get() as any).c;
-  const totalBookings = (db.prepare(`SELECT COUNT(*) as c FROM bookings`).get() as any).c;
+  const totalBookingsMonth = (db.prepare(`SELECT COUNT(*) as c FROM bookings WHERE created_at >= ? AND created_at < ?`).get(monthStart, monthEnd) as any).c;
   const todayBookings = (db.prepare(`SELECT COUNT(*) as c FROM bookings WHERE date(created_at) = ?`).get(today) as any).c;
-  const pendingBookings = (db.prepare(`SELECT COUNT(*) as c FROM bookings WHERE status = 'pending'`).get() as any).c;
+  const pendingBookingsMonth = (db.prepare(`SELECT COUNT(*) as c FROM bookings WHERE status = 'pending' AND created_at >= ? AND created_at < ?`).get(monthStart, monthEnd) as any).c;
   const confirmedToday = (db.prepare(`SELECT COUNT(*) as c FROM bookings WHERE appointment_date = ? AND status != 'cancelled'`).get(today) as any).c;
 
   // Bookings per day (last 7 days)
@@ -67,31 +76,33 @@ export function getDashboard(req: Request, res: Response) {
     `SELECT date(created_at) as day, COUNT(*) as count FROM bookings WHERE created_at >= datetime('now', '-7 days') GROUP BY day ORDER BY day`
   ).all();
 
-  // Department distribution
+  // Department distribution for selected month
   const deptStats = db.prepare(
-    `SELECT recommended_department, COUNT(*) as count FROM bookings WHERE recommended_department IS NOT NULL GROUP BY recommended_department ORDER BY count DESC`
-  ).all();
+    `SELECT COALESCE(recommended_department, 'ไม่ระบุ') as department, COUNT(*) as count FROM bookings WHERE created_at >= ? AND created_at < ? GROUP BY department ORDER BY count DESC`
+  ).all(monthStart, monthEnd);
 
-  // Most recent bookings
+  // Most recent bookings for selected month
   const recentBookings = db.prepare(
     `SELECT b.id, b.symptoms, b.urgency, b.recommended_department, b.appointment_date, b.appointment_time, b.status, b.created_at,
             u.email, u.username
      FROM bookings b JOIN patients p ON b.patient_id = p.id JOIN users u ON p.user_id = u.id
+     WHERE b.created_at >= ? AND b.created_at < ?
      ORDER BY b.created_at DESC LIMIT 20`
-  ).all();
+  ).all(monthStart, monthEnd);
 
   return res.json({
     ok: true,
     stats: {
       totalPatients,
-      totalBookings,
+      totalBookings: totalBookingsMonth,
       todayBookings,
-      pendingBookings,
+      pendingBookings: pendingBookingsMonth,
       confirmedToday,
     },
     bookingsPerDay,
     deptStats,
     recentBookings,
+    month,
   });
 }
 
@@ -149,6 +160,47 @@ export function getUsageStats(req: Request, res: Response) {
     `SELECT urgency, COUNT(*) as count FROM bookings WHERE urgency IS NOT NULL GROUP BY urgency`
   ).all();
 
+  // ---- AI usage stats ----
+  const aiTotals = db.prepare(
+    `SELECT
+       COUNT(*) as totalCalls,
+       COALESCE(SUM(prompt_tokens), 0) as totalPrompt,
+       COALESCE(SUM(completion_tokens), 0) as totalCompletion,
+       COALESCE(SUM(total_tokens), 0) as totalTokens
+     FROM ai_usage`
+  ).get() as any;
+
+  const aiToday = db.prepare(
+    `SELECT
+       COUNT(*) as calls,
+       COALESCE(SUM(total_tokens), 0) as tokens
+     FROM ai_usage WHERE date(created_at) = date('now')`
+  ).get() as any;
+
+  // Average AI users per day (unique user_id per day, over last 30 days)
+  const aiDailyUsers = db.prepare(
+    `SELECT date(created_at) as day, COUNT(DISTINCT user_id) as users
+     FROM ai_usage WHERE created_at >= datetime('now', '-30 days')
+     GROUP BY day ORDER BY day`
+  ).all() as { day: string; users: number }[];
+
+  const avgAiUsersPerDay = aiDailyUsers.length > 0
+    ? Math.round(aiDailyUsers.reduce((sum, r) => sum + r.users, 0) / aiDailyUsers.length * 10) / 10
+    : 0;
+
+  // Tokens per day (last 14 days)
+  const aiTokensPerDay = db.prepare(
+    `SELECT date(created_at) as day, COUNT(*) as calls, COALESCE(SUM(total_tokens), 0) as tokens
+     FROM ai_usage WHERE created_at >= datetime('now', '-14 days')
+     GROUP BY day ORDER BY day`
+  ).all();
+
+  // AI usage by step
+  const aiSteps = db.prepare(
+    `SELECT step, COUNT(*) as calls, COALESCE(SUM(total_tokens), 0) as tokens
+     FROM ai_usage GROUP BY step`
+  ).all();
+
   return res.json({
     ok: true,
     usage: {
@@ -159,6 +211,18 @@ export function getUsageStats(req: Request, res: Response) {
     },
     monthlyBookings,
     urgencyStats,
+    aiStats: {
+      totalCalls: aiTotals.totalCalls,
+      totalPrompt: aiTotals.totalPrompt,
+      totalCompletion: aiTotals.totalCompletion,
+      totalTokens: aiTotals.totalTokens,
+      todayCalls: aiToday.calls,
+      todayTokens: aiToday.tokens,
+      avgUsersPerDay: avgAiUsersPerDay,
+      aiDailyUsers,
+      aiTokensPerDay,
+      aiSteps,
+    },
   });
 }
 
