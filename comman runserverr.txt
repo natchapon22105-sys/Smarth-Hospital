@@ -1,0 +1,5 @@
+pm2 stop all
+pa2 restart all
+pm2 status
+pm2 save
+pm2 startup

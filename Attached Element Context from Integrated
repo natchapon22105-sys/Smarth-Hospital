@@ -1,0 +1,129 @@
+Attached Element Context from Integrated Browser
+
+Element: span.gradient-text.font-display.text-lg.font-bold.tracking-wider
+
+URL: http://localhost:3000/app-home
+
+HTML Path: main.relative.min-h-screen > header.relative.flex.items-center.justify-between.px-5.py-4 > div.flex.items-center.gap-3 > span.gradient-text.font-display.text-lg.font-bold.tracking-wider
+
+Outer HTML:
+```html
+<span class="gradient-text font-display text-lg font-bold tracking-wider">NUDMEDI</span>
+```
+
+Dimensions:
+- top: 22px
+- left: 261px
+- width: 85px
+- height: 28px
+
+CSS:
+```css
+*, ::before, ::after { --tw-border-spacing-x: 0;
+  --tw-border-spacing-y: 0;
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-rotate: 0;
+  --tw-skew-x: 0;
+  --tw-skew-y: 0;
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+  --tw-pan-x:  ;
+  --tw-pan-y:  ;
+  --tw-pinch-zoom:  ;
+  --tw-scroll-snap-strictness: proximity;
+  --tw-gradient-from-position:  ;
+  --tw-gradient-via-position:  ;
+  --tw-gradient-to-position:  ;
+  --tw-ordinal:  ;
+  --tw-slashed-zero:  ;
+  --tw-numeric-figure:  ;
+  --tw-numeric-spacing:  ;
+  --tw-numeric-fraction:  ;
+  --tw-ring-inset:  ;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: #fff;
+  --tw-ring-color: rgb(59 130 246 / 0.5);
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+  --tw-blur:  ;
+  --tw-brightness:  ;
+  --tw-contrast:  ;
+  --tw-grayscale:  ;
+  --tw-hue-rotate:  ;
+  --tw-invert:  ;
+  --tw-saturate:  ;
+  --tw-sepia:  ;
+  --tw-drop-shadow:  ;
+  --tw-backdrop-blur:  ;
+  --tw-backdrop-brightness:  ;
+  --tw-backdrop-contrast:  ;
+  --tw-backdrop-grayscale:  ;
+  --tw-backdrop-hue-rotate:  ;
+  --tw-backdrop-invert:  ;
+  --tw-backdrop-opacity:  ;
+  --tw-backdrop-saturate:  ;
+  --tw-backdrop-sepia:  ;
+  --tw-contain-size:  ;
+  --tw-contain-layout:  ;
+  --tw-contain-paint:  ;
+  --tw-contain-style:  ; }
+*, ::before, ::after { box-sizing: border-box; /* 1 */
+  border-width: 0; /* 2 */
+  border-style: solid; /* 2 */
+  border-color: #e5e7eb; /* 2 */ }
+.font-display { font-family: var(--font-sarabun), sans-serif; }
+.text-lg { font-size: 1.125rem;
+  line-height: 1.75rem; }
+.font-bold { font-weight: 700; }
+.tracking-wider { letter-spacing: 0.05em; }
+.gradient-text { background: linear-gradient(90deg, #0ea5e9, #3b82f6, #06b6d4, #0ea5e9);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-shift 4s ease infinite;
+  filter: drop-shadow(0 2px 8px rgba(14, 165, 233, 0.3)); }
+
+/* Pseudo-elements */
+::before, ::after { --tw-content: ''; }
+
+/* Inherited */
+.font-body { font-family: var(--font-inter), var(--font-sarabun), sans-serif }
+.text-ink { color: rgb(20 38 37 / var(--tw-text-opacity, 1)) }
+html, :host { line-height: 1.5; tab-size: 4 }
+
+/* Resolved values */
+border: 0px solid rgb(229, 231, 235);
+animation: gradient-shift 4s infinite;
+-webkit-text-fill-color: rgba(0, 0, 0, 0);
+background-attachment: scroll;
+background-clip: text;
+background-color: rgba(0, 0, 0, 0);
+background-image: linear-gradient(90deg, rgb(14, 165, 233), rgb(59, 130, 246), rgb(6, 182, 212), rgb(14, 165, 233));
+background-origin: padding-box;
+background-position-x: 3.65292%;
+background-position-y: 50%;
+background-repeat: repeat;
+background-size: 300% 300%;
+box-sizing: border-box;
+color: rgb(20, 38, 37);
+display: block;
+filter: drop-shadow(rgba(14, 165, 233, 0.3) 0px 2px 8px);
+font-family: __Sarabun_ceb837, __Sarabun_Fallback_ceb837, sans-serif;
+font-feature-settings: normal;
+font-size: 18px;
+font-weight: 700;
+height: 28px;
+letter-spacing: 0.9px;
+line-height: 28px;
+tab-size: 4;
+width: 84.6953px;
+
+/* CSS variables */
+--font-sarabun: '__Sarabun_ceb837', '__Sarabun_Fallback_ceb837';
+--tw-text-opacity: 1;
+--font-inter: '__Inter_f367f3', '__Inter_Fallback_f367f3';
+```
