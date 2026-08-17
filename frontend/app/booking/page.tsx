@@ -826,36 +826,31 @@ export default function BookingPage() {
         )}
 
         {/* ---- Select account modal (shows first) ---- */}
-        <Modal open={showSelectModal} onClose={() => setShowSelectModal(false)} title="จองคิวให้ใคร?">
-          <p className="mb-4 text-sm text-ink/55">เลือกบัญชีที่ต้องการจองคิว จากนั้นกรอกอาการได้เลย</p>
-          <div className="space-y-2">
-            <button
-              type="button"
-              onClick={() => { setSelectedPatientId("self"); setShowSelectModal(false); }}
-              className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition ${
-                selectedPatientId === "self"
-                  ? "border-teal bg-teal-light"
-                  : "border-line bg-surface hover:bg-teal-light"
-              }`}
-            >
-              <span className="font-medium text-ink">ตัวเอง</span>
-              {selectedPatientId === "self" && <span className="text-xs text-teal-dark">กำลังเลือก</span>}
+        <Modal open={showSelectModal} onClose={() => {}} disableBackdropClose title="จองคิวให้ใคร?">
+          <p className="mb-4 text-sm text-ink/55">เลือกบัญชีที่ต้องการ แล้วกด "ยืนยัน" ด้านล่าง</p>
+          <div className="flex flex-col gap-2">
+            <button type="button" onClick={() => setSelectedPatientId("self")}
+              className={`flex w-full items-center justify-between rounded-xl border-2 px-4 py-3.5 text-left text-sm transition ${
+                selectedPatientId === "self" ? "border-teal bg-teal-light shadow-sm" : "border-line bg-surface hover:border-teal/50"
+              }`}>
+              <div>
+                <p className="font-medium text-ink">ตัวเอง</p>
+                <p className="text-xs text-ink/45">จองคิวในชื่อตนเอง</p>
+              </div>
+              {selectedPatientId === "self" && <span className="flex h-6 w-6 items-center justify-center rounded-full bg-teal text-white text-xs">✓</span>}
             </button>
             {familyMembers.map((m) => {
-              const name = m.nickname || `${m.prefix_th || ""}${m.first_name_th || ""} ${m.last_name_th || ""}`.trim() || "ไม่ระบุชื่อ";
+              const name = m.nickname || `${m.prefix_th || ""}${m.first_name_th || ""} ${m.last_name_th || ""}`.trim() || "สมาชิก";
               return (
-                <button
-                  key={m.memberId}
-                  type="button"
-                  onClick={() => { setSelectedPatientId(m.patientId); setShowSelectModal(false); }}
-                  className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition ${
-                    selectedPatientId === m.patientId
-                      ? "border-teal bg-teal-light"
-                      : "border-line bg-surface hover:bg-teal-light"
-                  }`}
-                >
-                  <span className="font-medium text-ink">{name}</span>
-                  {selectedPatientId === m.patientId && <span className="text-xs text-teal-dark">กำลังเลือก</span>}
+                <button key={m.memberId} type="button" onClick={() => setSelectedPatientId(m.patientId)}
+                  className={`flex w-full items-center justify-between rounded-xl border-2 px-4 py-3.5 text-left text-sm transition ${
+                    selectedPatientId === m.patientId ? "border-teal bg-teal-light shadow-sm" : "border-line bg-surface hover:border-teal/50"
+                  }`}>
+                  <div>
+                    <p className="font-medium text-ink">{name}</p>
+                    <p className="text-xs text-ink/45">{m.relationship === "child" ? "บุตร" : m.relationship === "parent" ? "บิดามารดา" : m.relationship === "spouse" ? "คู่สมรส" : "สมาชิกในครอบครัว"}</p>
+                  </div>
+                  {selectedPatientId === m.patientId && <span className="flex h-6 w-6 items-center justify-center rounded-full bg-teal text-white text-xs">✓</span>}
                 </button>
               );
             })}
@@ -865,12 +860,8 @@ export default function BookingPage() {
               ยังไม่มีบัญชีรอง <Link href="/family" className="text-teal-dark underline" onClick={() => setShowSelectModal(false)}>เพิ่มที่นี่</Link>
             </p>
           )}
-          <button
-            type="button"
-            className="btn-primary mt-4 w-full"
-            onClick={() => setShowSelectModal(false)}
-          >
-            เริ่มจองคิว
+          <button type="button" className="btn-primary mt-5 w-full" onClick={() => { if (selectedPatientId) setShowSelectModal(false); }}>
+            ยืนยัน
           </button>
         </Modal>
       </div>

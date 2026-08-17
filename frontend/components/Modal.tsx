@@ -7,15 +7,16 @@ type ModalProps = {
   onClose: () => void;
   title?: string;
   children: ReactNode;
+  disableBackdropClose?: boolean;
 };
 
-export default function Modal({ open, onClose, title, children }: ModalProps) {
+export default function Modal({ open, onClose, title, children, disableBackdropClose }: ModalProps) {
   if (!open) return null;
 
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4 py-6"
-      onClick={onClose}
+      onClick={disableBackdropClose ? undefined : onClose}
     >
       <div
         className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-line bg-surface p-5 shadow-xl"

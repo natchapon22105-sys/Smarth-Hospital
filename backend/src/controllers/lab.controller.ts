@@ -9,13 +9,31 @@ import { generateLabResultPdf } from "../utils/pdf";
 // the client.
 
 // ---------------------------------------------------------------------------
-// GET /api/lab/results?month=YYYY-MM
+// GET /api/lab/results?month=YYYY-MM&patientId=xxx
 // Returns: { results: LabResult[] } — lab results for the current patient,
+// optionally for a verified family member (sub-account).
 // ordered by test_date DESC then created_at DESC.
 // ---------------------------------------------------------------------------
 export function getLabResults(req: Request, res: Response) {
-  const patientId = req.patientId;
-  if (!patientId) return res.status(404).json({ error: "no_patient_record" });
+  const selfPatientId = req.patientId;
+  const userId = req.userId;
+  if (!selfPatientId) return res.status(404).json({ error: "no_patient_record" });
+
+  // Resolve which patient to fetch results for
+  let targetPatientId = selfPatientId;
+  const reqPatientId = req.query.patientId as string | undefined;
+  if (reqPatientId && reqPatientId !== selfPatientId) {
+    // Verify it's a family member
+    const ok = db
+      .prepare(
+        `SELECT 1 FROM family_members WHERE owner_user_id = ? AND patient_id = ?`
+      )
+      .get(userId, reqPatientId);
+    if (!ok) {
+      return res.status(403).json({ error: "forbidden", message: "ไม่มีสิทธิ์ดูผลตรวจนี้" });
+    }
+    targetPatientId = reqPatientId;
+  }
 
   const today = new Date();
   today.setHours(today.getHours() + 7); // Bangkok
@@ -31,7 +49,7 @@ export function getLabResults(req: Request, res: Response) {
     .prepare(
       `SELECT * FROM lab_results WHERE patient_id = ? AND test_date >= ? AND test_date < ? ORDER BY test_date DESC, created_at DESC`
     )
-    .all(patientId, monthStart, monthEnd);
+    .all(targetPatientId, monthStart, monthEnd);
 
   return res.json({ ok: true, results, month });
 }

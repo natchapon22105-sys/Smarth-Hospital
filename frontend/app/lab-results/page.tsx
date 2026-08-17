@@ -60,37 +60,40 @@ export default function LabResultsPage() {
   const [selected, setSelected] = useState<LabResult | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Family members
+  type FamilyMember = { memberId: string; patientId: string; relationship: string; nickname: string | null; prefix_th: string | null; first_name_th: string | null; last_name_th: string | null };
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [selectedPatientId, setSelectedPatientId] = useState<string>("self");
+
   const now = new Date();
   const [month, setMonth] = useState(() => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
 
   useEffect(() => {
-    loadResults();
-  }, [month]);
+    loadFamilyMembers();
+  }, []);
 
-  // เปิดดูผลตรวจ + ทำเครื่องหมาย "อ่านแล้ว" (ให้ไฮไลท์ที่หน้าแรกหายไป)
-  function openResult(r: LabResult) {
-    setSelected(r);
-    if (!r.is_read) {
-      // อัปเดตสถานะในหน้าทันที (ไม่รอ network)
-      setResults((prev) => prev.map((x) => (x.id === r.id ? { ...x, is_read: 1 } : x)));
-      api
-        .post(`/api/lab/results/${r.id}/read`)
-        .then(() => {
-          // แจ้งหน้าแรกให้ re-fetch จำนวน unread
-          window.dispatchEvent(new Event("lab-results-read"));
-        })
-        .catch(() => {
-          // ถ้าส่งไม่สำเร็จ คืนสถานะเดิม
-          setResults((prev) => prev.map((x) => (x.id === r.id ? { ...x, is_read: 0 } : x)));
-        });
-    }
+  useEffect(() => {
+    loadResults();
+  }, [month, selectedPatientId]);
+
+  async function loadFamilyMembers() {
+    try {
+      const res = await api.get<{ members: FamilyMember[] }>("/api/family/members");
+      setFamilyMembers(res.members || []);
+    } catch { /* non-fatal */ }
+  }
+
+  function patientFilterQuery(): string {
+    let q = `month=${month}`;
+    if (selectedPatientId !== "self") q += `&patientId=${selectedPatientId}`;
+    return q;
   }
 
   async function loadResults() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get<{ results: LabResult[] }>(`/api/lab/results?month=${month}`);
+      const res = await api.get<{ results: LabResult[] }>(`/api/lab/results?${patientFilterQuery()}`);
       setResults(res.results);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "โหลดผลตรวจไม่สำเร็จ");
@@ -99,11 +102,23 @@ export default function LabResultsPage() {
     }
   }
 
+  // เปิดดูผลตรวจ + ทำเครื่องหมาย "อ่านแล้ว"
+  function openResult(r: LabResult) {
+    setSelected(r);
+    if (!r.is_read) {
+      setResults((prev) => prev.map((x) => (x.id === r.id ? { ...x, is_read: 1 } : x)));
+      api
+        .post(`/api/lab/results/${r.id}/read`)
+        .then(() => window.dispatchEvent(new Event("lab-results-read")))
+        .catch(() => setResults((prev) => prev.map((x) => (x.id === r.id ? { ...x, is_read: 0 } : x))));
+    }
+  }
+
   async function handleRefresh() {
     setRefreshing(true);
     setError(null);
     try {
-      const res = await api.get<{ results: LabResult[] }>(`/api/lab/results?month=${month}`);
+      const res = await api.get<{ results: LabResult[] }>(`/api/lab/results?${patientFilterQuery()}`);
       setResults(res.results);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "โหลดผลตรวจไม่สำเร็จ");
@@ -185,6 +200,39 @@ export default function LabResultsPage() {
       </div>
 
       <div className="relative z-10 mx-auto max-w-lg space-y-4 px-5">
+        {familyMembers.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedPatientId("self")}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                selectedPatientId === "self"
+                  ? "border-teal bg-teal text-white"
+                  : "border-line text-ink/60 hover:bg-teal-light"
+              }`}
+            >
+              ตัวเอง
+            </button>
+            {familyMembers.map((m) => {
+              const name = m.nickname || `${m.prefix_th || ""}${m.first_name_th || ""}`.trim() || "ไม่ระบุ";
+              return (
+                <button
+                  key={m.memberId}
+                  type="button"
+                  onClick={() => setSelectedPatientId(m.patientId)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                    selectedPatientId === m.patientId
+                      ? "border-teal bg-teal text-white"
+                      : "border-line text-ink/60 hover:bg-teal-light"
+                  }`}
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {error && (
           <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>
         )}
