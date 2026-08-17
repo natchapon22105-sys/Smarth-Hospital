@@ -1,5 +1,15 @@
-pm2 stop all
-pa2 restart all
-pm2 status
-pm2 save
-pm2 startup
+🚀 NudMedi Commands
+====================
+▶️ START:     bash run_system.sh        (หรือ pm2 start ecosystem.config.js)
+⏹️ STOP:     bash stop_system.sh       (หรือ pm2 stop all)
+🔄 RESTART:  pm2 restart all
+📊 STATUS:   pm2 status
+💾 SAVE:     pm2 save
+🔄 AUTO BOOT: pm2 startup              ← ทำแค่ครั้งแรก
+🔍 LOGS:     pm2 logs nudmedi-api
+🔄 TUNNEL:   pm2 restart nudmedi-tunnel
+
+🌐 URLs
+Frontend: http://localhost:3000  |  https://nudmedi.com
+Staff:    http://localhost:3001
+Backend:  http://localhost:4000
