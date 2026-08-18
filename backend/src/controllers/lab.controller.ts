@@ -8,32 +8,35 @@ import { generateLabResultPdf } from "../utils/pdf";
 // requireAuth already ran - req.patientId comes from the session, never from
 // the client.
 
+function resolvePatientId(req: Request, res: Response): string | null {
+  const selfPatientId = req.patientId;
+  const userId = req.userId;
+  if (!selfPatientId) {
+    res.status(404).json({ error: "no_patient_record" });
+    return null;
+  }
+  const reqPatientId = req.query.patientId as string | undefined;
+  if (reqPatientId && reqPatientId !== selfPatientId) {
+    const ok = db
+      .prepare(`SELECT 1 FROM family_members WHERE owner_user_id = ? AND patient_id = ?`)
+      .get(userId, reqPatientId);
+    if (!ok) {
+      res.status(403).json({ error: "forbidden", message: "ไม่มีสิทธิ์ดูข้อมูลนี้" });
+      return null;
+    }
+    return reqPatientId;
+  }
+  return selfPatientId;
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/lab/results?month=YYYY-MM&patientId=xxx
 // Returns: { results: LabResult[] } — lab results for the current patient,
 // optionally for a verified family member (sub-account).
-// ordered by test_date DESC then created_at DESC.
 // ---------------------------------------------------------------------------
 export function getLabResults(req: Request, res: Response) {
-  const selfPatientId = req.patientId;
-  const userId = req.userId;
-  if (!selfPatientId) return res.status(404).json({ error: "no_patient_record" });
-
-  // Resolve which patient to fetch results for
-  let targetPatientId = selfPatientId;
-  const reqPatientId = req.query.patientId as string | undefined;
-  if (reqPatientId && reqPatientId !== selfPatientId) {
-    // Verify it's a family member
-    const ok = db
-      .prepare(
-        `SELECT 1 FROM family_members WHERE owner_user_id = ? AND patient_id = ?`
-      )
-      .get(userId, reqPatientId);
-    if (!ok) {
-      return res.status(403).json({ error: "forbidden", message: "ไม่มีสิทธิ์ดูผลตรวจนี้" });
-    }
-    targetPatientId = reqPatientId;
-  }
+  const targetPatientId = resolvePatientId(req, res);
+  if (!targetPatientId) return;
 
   const today = new Date();
   today.setHours(today.getHours() + 7); // Bangkok
@@ -59,13 +62,13 @@ export function getLabResults(req: Request, res: Response) {
 // Returns a single lab result with full detail.
 // ---------------------------------------------------------------------------
 export function getLabResultById(req: Request, res: Response) {
-  const patientId = req.patientId;
-  if (!patientId) return res.status(404).json({ error: "no_patient_record" });
+  const targetPatientId = resolvePatientId(req, res);
+  if (!targetPatientId) return;
 
   const { id } = req.params;
   const result = db
     .prepare(`SELECT * FROM lab_results WHERE id = ? AND patient_id = ?`)
-    .get(id, patientId) as any;
+    .get(id, targetPatientId) as any;
 
   if (!result) {
     return res.status(404).json({ error: "not_found", message: "ไม่พบผลตรวจนี้" });
@@ -79,13 +82,13 @@ export function getLabResultById(req: Request, res: Response) {
 // Marks a lab result as read by the patient (clears the unread highlight).
 // ---------------------------------------------------------------------------
 export function markLabResultRead(req: Request, res: Response) {
-  const patientId = req.patientId;
-  if (!patientId) return res.status(404).json({ error: "no_patient_record" });
+  const targetPatientId = resolvePatientId(req, res);
+  if (!targetPatientId) return;
 
   const { id } = req.params;
   const result = db
     .prepare(`SELECT id FROM lab_results WHERE id = ? AND patient_id = ?`)
-    .get(id, patientId) as any;
+    .get(id, targetPatientId) as any;
   if (!result) {
     return res.status(404).json({ error: "not_found", message: "ไม่พบผลตรวจนี้" });
   }

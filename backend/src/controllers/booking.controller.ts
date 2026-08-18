@@ -374,14 +374,26 @@ export async function staffCreateBooking(req: Request, res: Response) {
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/booking/history
+// GET /api/booking/history?patientId=xxx
 // ---------------------------------------------------------------------------
 export function getBookingHistory(req: Request, res: Response) {
-  if (!req.patientId) return res.status(404).json({ error: "no_patient_record" });
+  const selfPatientId = req.patientId;
+  const userId = req.userId;
+  if (!selfPatientId) return res.status(404).json({ error: "no_patient_record" });
+
+  let targetPatientId = selfPatientId;
+  const reqPatientId = req.query.patientId as string | undefined;
+  if (reqPatientId && reqPatientId !== selfPatientId) {
+    const ok = db
+      .prepare(`SELECT 1 FROM family_members WHERE owner_user_id = ? AND patient_id = ?`)
+      .get(userId, reqPatientId);
+    if (!ok) return res.status(403).json({ error: "forbidden" });
+    targetPatientId = reqPatientId;
+  }
 
   const bookings = db
     .prepare(`SELECT * FROM bookings WHERE patient_id = ? ORDER BY created_at DESC`)
-    .all(req.patientId);
+    .all(targetPatientId);
 
   return res.json({ ok: true, bookings });
 }
