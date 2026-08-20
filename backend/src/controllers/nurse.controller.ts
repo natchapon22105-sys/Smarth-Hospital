@@ -30,8 +30,8 @@ export function getQueueByDate(req: Request, res: Response) {
         b.recommended_department,
         b.status,
         b.created_at,
-        u.username,
-        u.email,
+        COALESCE(u.username, p.first_name_th) as username,
+        COALESCE(u.email, '(บัญชีรอง)') as email,
         u.phone,
         p.prefix_th,
         p.first_name_th,
@@ -40,7 +40,7 @@ export function getQueueByDate(req: Request, res: Response) {
         UPPER(SUBSTR(b.id, 1, 8)) as queue_number
       FROM bookings b
       JOIN patients p ON b.patient_id = p.id
-      JOIN users u ON p.user_id = u.id
+      LEFT JOIN users u ON p.user_id = u.id
       WHERE b.appointment_date = ?
       ORDER BY b.appointment_time ASC`
     )
